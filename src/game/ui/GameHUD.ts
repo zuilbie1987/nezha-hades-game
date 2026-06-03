@@ -5,6 +5,11 @@ export class GameHUD {
         rc.rectangle(20, 20, (hero.hp / hero.maxHp) * 200, 25, { fill: '#ef4444', fillStyle: 'solid', roughness: 1, stroke: 'none' });
         rc.rectangle(20, 20, 200, 25, { stroke: '#374151', strokeWidth: 3, roughness: 2 });
         
+        // 【新增】显示灵石数量 (绿色)
+        ctx.fillStyle = '#10b981';
+        ctx.font = 'bold 20px "Comic Sans MS", cursive, sans-serif';
+        ctx.fillText(`💎 灵石: ${hero.spiritStones}`, 240, 40);
+        
         // 冷却条
         if (hero.dashCooldown > 0) rc.rectangle(20, 55, (hero.dashCooldown / 40) * 100, 10, { fill: '#3b82f6', fillStyle: 'solid', roughness: 1, stroke: 'none' });
         if (hero.attackCooldown > 0) rc.rectangle(20, 70, (hero.attackCooldown / 20) * 100, 10, { fill: '#fbbf24', fillStyle: 'solid', roughness: 1, stroke: 'none' });
