@@ -5,18 +5,16 @@ export class DialogueUI {
         if (!dialogue.active || !dialogue.lines[dialogue.index]) return;
 
         const currentLine = dialogue.lines[dialogue.index];
-        const boxX = 100;
-        const boxY = 400;
-        const boxWidth = 600;
+        const screenW = window.innerWidth;
+        const screenH = window.innerHeight;
+        
+        const boxWidth = Math.min(800, screenW - 40);
         const boxHeight = 150;
+        const boxX = (screenW - boxWidth) / 2;
+        const boxY = screenH - boxHeight - 40; // 固定在屏幕正下方
 
         rc.rectangle(boxX, boxY, boxWidth, boxHeight, {
-            fill: '#f8fafc', 
-            fillStyle: 'solid',
-            stroke: '#333',
-            strokeWidth: 4,
-            roughness: 2,
-            bowing: 1
+            fill: '#f8fafc', fillStyle: 'solid', stroke: '#333', strokeWidth: 4, roughness: 2, bowing: 1
         });
 
         ctx.fillStyle = currentLine.color;

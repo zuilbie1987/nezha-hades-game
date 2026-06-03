@@ -12,20 +12,33 @@ export class GameHUD {
         // 场景文本
         ctx.fillStyle = '#374151';
         ctx.font = 'bold 24px "Comic Sans MS", cursive, sans-serif';
-        const sceneName = currentScene === 'HOME' ? '陈塘关府邸' : '试炼场';
+        // 根据不同场景显示名称
+        let sceneName = '未知区域';
+        if (currentScene === 'HOME') sceneName = '陈塘关府邸';
+        else if (currentScene === 'BATTLE') sceneName = '试炼场';
+        else if (currentScene === 'OASIS') sceneName = '莲池仙境';
         ctx.fillText(`魔童降世 - ${sceneName}`, 20, 115);
 
-        // 死亡结算
+        // 【修复】动态居中的死亡结算与轮回提示
         if (hero.state === 'DEAD') {
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+            const cx = screenW / 2;
+            const cy = screenH / 2;
+
             ctx.fillStyle = 'rgba(244, 240, 234, 0.7)';
-            ctx.fillRect(0, 0, 800, 600);
+            ctx.fillRect(0, 0, screenW, screenH);
+            
             ctx.fillStyle = '#b91c1c';
             ctx.font = 'bold 72px "Comic Sans MS", cursive, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('GAME OVER', 400, 300);
+            ctx.fillText('GAME OVER', cx, cy - 20);
+            
+            // 新增轮回提示
             ctx.fillStyle = '#374151';
             ctx.font = 'bold 24px "Comic Sans MS", cursive, sans-serif';
-            ctx.fillText('刷新页面重新挑战', 400, 350);
+            ctx.fillText('[ 按 J 键回归莲池重塑金身 ]', cx, cy + 40);
+            
             ctx.textAlign = 'left'; 
         }
     }

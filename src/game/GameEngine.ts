@@ -1,6 +1,6 @@
 import rough from 'roughjs';
 import { Input } from '../engine/Input';
-import type { Enemy, DialogueLine, Boon } from './entities/Types';
+import type { Enemy, DialogueLine, Boon, Obstacle, Door } from './entities/Types';
 import { DialogueUI } from './ui/DialogueUI';
 import { GameHUD } from './ui/GameHUD';
 import { BoonSystem } from './systems/BoonSystem';
@@ -12,7 +12,11 @@ export class GameEngine {
     private rc: any;
     private frame: number = 0;
 
-    private currentScene: 'HOME' | 'BATTLE' = 'HOME';
+    private screenW: number = 800;
+    private screenH: number = 600;
+
+    // 【新增】OASIS 作为独立的休息区场景
+    private currentScene: 'HOME' | 'BATTLE' | 'OASIS' = 'HOME';
 
     private hero = { 
         x: 400, y: 400, speed: 5, hp: 100, maxHp: 100, radius: 25,
@@ -24,32 +28,60 @@ export class GameEngine {
     };
 
     private npcLiJing = { x: 400, y: 200, radius: 40 };
-    private portal = { x: 800, y: 200, radius: 40, active: false };
+    private homePortal = { x: 800, y: 200, radius: 40, active: false };
+
+    // 【新增】休息区的莲花池实体
+    private lotusPool = { x: 800, y: 600, radius: 80, used: false };
 
     private dialogue = { active: false, index: 0, lines: [] as DialogueLine[], cooldown: 0 };
+    
+    private mapWidth = 1600; 
+    private mapHeight = 1200;
     private enemies: Enemy[] = [];
-    private mapWidth = 1200;
-    private mapHeight = 800;
-    // 【新增】赐福系统状态
+    private obstacles: Obstacle[] = []; 
+    private doors: Door[] = [];         
+    
     private currentBoons: Boon[] = [];
-    private roomCleared: boolean = false; // 标记房间是否已经清空过
+    private roomCleared: boolean = false; 
+    private expectedReward: 'BOON' | 'HEAL' = 'BOON'; 
 
     constructor(canvasId: string) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
-        const dpr = window.devicePixelRatio || 1;
-        const rect = this.canvas.getBoundingClientRect();
-        this.canvas.width = rect.width * dpr;
-        this.canvas.height = rect.height * dpr;
         this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D;
-        this.ctx.scale(dpr, dpr);
         this.rc = rough.canvas(this.canvas);
+        
+        window.addEventListener('resize', this.handleResize);
+        this.handleResize(); 
         requestAnimationFrame(this.gameLoop);
     }
 
-    private applyBoon(boon: Boon) {
-        boon.apply(this.hero); // 让赐福直接修改 hero 的属性
-        this.hero.state = 'NORMAL'; // 恢复正常状态
-        this.currentBoons = []; // 清空卡片
+    private handleResize = () => {
+        const dpr = window.devicePixelRatio || 1;
+        this.screenW = window.innerWidth;
+        this.screenH = window.innerHeight;
+        this.canvas.width = this.screenW * dpr;
+        this.canvas.height = this.screenH * dpr;
+        this.ctx.resetTransform();
+        this.ctx.scale(dpr, dpr);
+    }
+
+    // 【新增】轮回重塑方法
+    private resurrect() {
+        this.hero.hp = this.hero.maxHp;
+        this.hero.state = 'NORMAL';
+        this.hero.hitFlashTimer = 0;
+        this.hero.attackCooldown = 20; // 防止复活瞬间触发攻击
+        this.hero.hasDealtDamage = false;
+        
+        // 剥夺当前的赐福（肉鸽设定：死亡掉落局内强化）
+        this.hero.boonColor = '#fbbf24'; 
+        
+        // 回到陈塘关
+        this.currentScene = 'HOME';
+        this.hero.x = 400;
+        this.hero.y = 400;
+        this.homePortal.active = false; // 传送门关闭，需重新对话激活
+        this.dialogue.active = false;
     }
 
     private startDialogue(lines: DialogueLine[]) {
@@ -60,28 +92,115 @@ export class GameEngine {
         this.hero.state = 'NORMAL'; 
     }
 
-    private transitionToBattle() {
+    // 进入战斗房间
+    private transitionToBattle(rewardType: 'BOON' | 'HEAL') {
         this.currentScene = 'BATTLE';
-        this.roomCleared = false; // 重置清空标记
-        this.hero.x = 400; 
-        this.hero.y = 600;
+        this.roomCleared = false;
+        this.expectedReward = rewardType;
+        this.doors = []; 
+        
+        this.hero.x = this.mapWidth / 2; 
+        this.hero.y = this.mapHeight - 150;
+        
+        this.obstacles = [];
+        const types: ('ROCK' | 'BAMBOO' | 'POND')[] = ['ROCK', 'BAMBOO', 'POND'];
+        const numObstacles = Math.floor(Math.random() * 4) + 6; 
+        
+        for (let i = 0; i < numObstacles; i++) {
+            let ox = 200 + Math.random() * (this.mapWidth - 400);
+            let oy = 200 + Math.random() * (this.mapHeight - 400);
+            
+            const distToHero = Math.sqrt(Math.pow(ox - this.hero.x, 2) + Math.pow(oy - this.hero.y, 2));
+            if (distToHero < 150) oy -= 200; 
+
+            this.obstacles.push({
+                x: ox,
+                y: oy,
+                radius: 50 + Math.random() * 30,
+                type: types[Math.floor(Math.random() * types.length)]
+            });
+        }
+
         this.enemies = [
-            { id: 1, x: 600, y: 400, hp: 50, maxHp: 50, radius: 30, hitFlashTimer: 0, speed: 2, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 },
-            { id: 2, x: 800, y: 200, hp: 50, maxHp: 50, radius: 30, hitFlashTimer: 0, speed: 2.5, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 }
+            { id: 1, x: this.mapWidth / 2 - 200, y: 300, hp: 50, maxHp: 50, radius: 30, hitFlashTimer: 0, speed: 2, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 },
+            { id: 2, x: this.mapWidth / 2 + 200, y: 300, hp: 50, maxHp: 50, radius: 30, hitFlashTimer: 0, speed: 2.5, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 },
+            { id: 3, x: this.mapWidth / 2, y: 200, hp: 70, maxHp: 70, radius: 35, hitFlashTimer: 0, speed: 1.5, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 },
+            { id: 4, x: this.mapWidth / 2 - 300, y: 250, hp: 40, maxHp: 40, radius: 30, hitFlashTimer: 0, speed: 2.2, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 }
         ];
+    }
+
+    // 【新增】进入休息区
+    private transitionToOasis() {
+        this.currentScene = 'OASIS';
+        this.roomCleared = true; // 休息区没有怪物，视为已清理
+        this.hero.x = this.mapWidth / 2;
+        this.hero.y = this.mapHeight - 150;
+        
+        // 莲花池放置在地图中央
+        this.lotusPool.x = this.mapWidth / 2;
+        this.lotusPool.y = this.mapHeight / 2 - 100;
+        this.lotusPool.used = false;
+        
+        this.obstacles = [];
+        this.enemies = [];
+        this.spawnRewardDoors(); // 生成离开休息区的门
+    }
+
+    private spawnRewardDoors() {
+        this.doors = [];
+        const rewardTypes: ('BOON' | 'HEAL')[] = ['BOON', 'HEAL'];
+        
+        for (let i = 0; i < 2; i++) {
+            let px = this.mapWidth / 2 + (i === 0 ? -200 : 200);
+            let py = 150;
+            const radius = 40;
+            let valid = false;
+            let attempts = 0;
+            
+            while (!valid && attempts < 50) {
+                valid = true;
+                for (const obs of this.obstacles) {
+                    const dist = Math.sqrt(Math.pow(px - obs.x, 2) + Math.pow(py - obs.y, 2));
+                    if (dist < radius + obs.radius + 30) { 
+                        valid = false;
+                        px += (Math.random() > 0.5 ? 1 : -1) * 40; 
+                        py += (Math.random() > 0.5 ? 1 : -1) * 40;
+                        break;
+                    }
+                }
+                attempts++;
+            }
+            
+            px = Math.max(100, Math.min(px, this.mapWidth - 100));
+            py = Math.max(100, Math.min(py, this.mapHeight - 100));
+            
+            this.doors.push({ x: px, y: py, radius, rewardType: rewardTypes[i] });
+        }
+    }
+
+    private applyBoon(boon: Boon) {
+        boon.apply(this.hero); 
+        this.hero.state = 'NORMAL'; 
+        this.currentBoons = []; 
+        this.spawnRewardDoors(); 
     }
 
     private update() {
         this.frame++;
-        if (this.hero.state === 'DEAD') return;
         
-        // ====== 赐福界面状态拦截 ======
+        // 【核心】死亡拦截与复活判定
+        if (this.hero.state === 'DEAD') {
+            if (Input.keys.j) {
+                this.resurrect();
+            }
+            return; 
+        }
+        
         if (this.hero.state === 'BOON_SELECTION') {
-            // 在此状态下，游戏时间完全暂停，专门监听 1、2、3 键
             if (Input.keys['1'] && this.currentBoons[0]) this.applyBoon(this.currentBoons[0]);
             if (Input.keys['2'] && this.currentBoons[1]) this.applyBoon(this.currentBoons[1]);
             if (Input.keys['3'] && this.currentBoons[2]) this.applyBoon(this.currentBoons[2]);
-            return; // 拦截所有后续更新 (敌人不准动，哪吒不准跑)
+            return; 
         }
 
         if (this.dialogue.cooldown > 0) this.dialogue.cooldown--;
@@ -91,7 +210,7 @@ export class GameEngine {
                 this.dialogue.cooldown = 15;
                 if (this.dialogue.index >= this.dialogue.lines.length) {
                     this.dialogue.active = false;
-                    if (this.currentScene === 'HOME') this.portal.active = true;
+                    if (this.currentScene === 'HOME') this.homePortal.active = true;
                 }
             }
             return;
@@ -111,15 +230,56 @@ export class GameEngine {
                     { speaker: '系统', text: '（通往试炼场的传送门已开启）', color: '#4b5563' }
                 ]);
             }
-            if (this.portal.active) {
-                const distPortal = Math.sqrt(Math.pow(this.hero.x - this.portal.x, 2) + Math.pow(this.hero.y - this.portal.y, 2));
-                if (distPortal < 50) this.transitionToBattle();
+            if (this.homePortal.active) {
+                const distPortal = Math.sqrt(Math.pow(this.hero.x - this.homePortal.x, 2) + Math.pow(this.hero.y - this.homePortal.y, 2));
+                if (distPortal < 50) this.transitionToBattle('BOON');
             }
+            
         } else if (this.currentScene === 'BATTLE') {
             this.updateEnemies();
+            this.checkDoors();
+            
+        } else if (this.currentScene === 'OASIS') {
+            // 【新增】莲花池交互
+            const distPool = Math.sqrt(Math.pow(this.hero.x - this.lotusPool.x, 2) + Math.pow(this.hero.y - this.lotusPool.y, 2));
+            if (distPool < this.lotusPool.radius + 50 && Input.keys.f && !this.lotusPool.used) {
+                // 恢复 50% 生命值
+                this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + this.hero.maxHp * 0.5);
+                this.lotusPool.used = true;
+            }
+            this.checkDoors();
         }
 
         this.updateHero();
+    }
+
+    // 抽离统一的进门检测
+    private checkDoors() {
+        for (const door of this.doors) {
+            const dist = Math.sqrt(Math.pow(this.hero.x - door.x, 2) + Math.pow(this.hero.y - door.y, 2));
+            if (dist < 50) {
+                if (door.rewardType === 'HEAL') {
+                    this.transitionToOasis(); // 进灵丹妙药门 -> 去莲池绿洲
+                } else {
+                    this.transitionToBattle(door.rewardType); // 进神明门 -> 战斗拿赐福
+                }
+                break;
+            }
+        }
+    }
+
+    private checkObstacleCollision(entity: {x: number, y: number, radius: number}) {
+        for (const obs of this.obstacles) {
+            const dx = entity.x - obs.x;
+            const dy = entity.y - obs.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const minDist = entity.radius + obs.radius;
+            if (dist < minDist && dist > 0) {
+                const overlap = minDist - dist;
+                entity.x += (dx / dist) * overlap;
+                entity.y += (dy / dist) * overlap;
+            }
+        }
     }
 
     private updateHero() {
@@ -138,6 +298,7 @@ export class GameEngine {
                 this.hero.y += this.hero.dirY * this.hero.speed;
             }
 
+            // OASIS 不允许攻击
             if (Input.keys.j && this.hero.attackCooldown <= 0 && this.currentScene === 'BATTLE') {
                 this.hero.state = 'ATTACKING';
                 this.hero.attackTimer = this.hero.attackDuration;
@@ -181,13 +342,26 @@ export class GameEngine {
         this.hero.x = Math.max(pad, Math.min(this.hero.x, this.mapWidth - pad));
         this.hero.y = Math.max(pad, Math.min(this.hero.y, this.mapHeight - pad));
 
-        if (this.currentScene === 'HOME' && this.hero.state !== 'DASHING') {
-            const distNPC = Math.sqrt(Math.pow(this.hero.x - this.npcLiJing.x, 2) + Math.pow(this.hero.y - this.npcLiJing.y, 2));
-            const minNpcDist = this.hero.radius + this.npcLiJing.radius;
-            if (distNPC < minNpcDist && distNPC > 0) {
-                const overlap = minNpcDist - distNPC;
-                this.hero.x += ((this.hero.x - this.npcLiJing.x) / distNPC) * overlap;
-                this.hero.y += ((this.hero.y - this.npcLiJing.y) / distNPC) * overlap;
+        if (this.hero.state !== 'DASHING') {
+            this.checkObstacleCollision(this.hero);
+            
+            if (this.currentScene === 'HOME') {
+                const distNPC = Math.sqrt(Math.pow(this.hero.x - this.npcLiJing.x, 2) + Math.pow(this.hero.y - this.npcLiJing.y, 2));
+                const minNpcDist = this.hero.radius + this.npcLiJing.radius;
+                if (distNPC < minNpcDist && distNPC > 0) {
+                    const overlap = minNpcDist - distNPC;
+                    this.hero.x += ((this.hero.x - this.npcLiJing.x) / distNPC) * overlap;
+                    this.hero.y += ((this.hero.y - this.npcLiJing.y) / distNPC) * overlap;
+                }
+            } else if (this.currentScene === 'OASIS') {
+                // 莲花池物理阻挡
+                const distPool = Math.sqrt(Math.pow(this.hero.x - this.lotusPool.x, 2) + Math.pow(this.hero.y - this.lotusPool.y, 2));
+                const minPoolDist = this.hero.radius + this.lotusPool.radius;
+                if (distPool < minPoolDist && distPool > 0) {
+                    const overlap = minPoolDist - distPool;
+                    this.hero.x += ((this.hero.x - this.lotusPool.x) / distPool) * overlap;
+                    this.hero.y += ((this.hero.y - this.lotusPool.y) / distPool) * overlap;
+                }
             }
         }
     }
@@ -202,8 +376,24 @@ export class GameEngine {
                 continue;
             }
 
+            for (let j = 0; j < this.enemies.length; j++) {
+                if (i === j) continue;
+                const other = this.enemies[j];
+                const edx = enemy.x - other.x;
+                const edy = enemy.y - other.y;
+                const edist = Math.sqrt(edx * edx + edy * edy);
+                const minEdist = enemy.radius + other.radius;
+                if (edist < minEdist && edist > 0) {
+                    const overlap = minEdist - edist;
+                    enemy.x += (edx / edist) * overlap * 0.1;
+                    enemy.y += (edy / edist) * overlap * 0.1;
+                }
+            }
+
             const dist = Math.sqrt(Math.pow(this.hero.x - enemy.x, 2) + Math.pow(this.hero.y - enemy.y, 2));
             if (dist > 0) { enemy.dirX = (this.hero.x - enemy.x) / dist; enemy.dirY = (this.hero.y - enemy.y) / dist; }
+
+            this.checkObstacleCollision(enemy);
 
             if (enemy.state === 'CHASING') {
                 if (dist < 70 && enemy.attackCooldown <= 0) {
@@ -231,44 +421,53 @@ export class GameEngine {
             }
         }
         
-        // 房间清空检测，触发神明赐福
         if (this.enemies.length === 0 && !this.roomCleared && this.currentScene === 'BATTLE') {
             this.roomCleared = true;
-            this.hero.state = 'BOON_SELECTION';
-            // 抽取 3 个赐福
-            this.currentBoons = BoonSystem.generateBoons(3); 
+            if (this.expectedReward === 'BOON') {
+                this.hero.state = 'BOON_SELECTION';
+                this.currentBoons = BoonSystem.generateBoons(3); 
+            } 
+            // 如果原本期待HEAL，直接发个门，不再弹神明卡片
         }
     }
 
     private draw() {
-        this.ctx.clearRect(0, 0, 800, 600); 
+        this.ctx.clearRect(0, 0, this.screenW, this.screenH); 
         this.ctx.save();
-        this.ctx.translate(400 - this.hero.x, 300 - this.hero.y);
+        
+        const cameraX = this.screenW / 2 - this.hero.x;
+        const cameraY = this.screenH / 2 - this.hero.y;
+        this.ctx.translate(cameraX, cameraY);
 
         this.drawMap();
         
         if (this.currentScene === 'HOME') {
             this.drawNPC();
-            this.drawPortal();
+            this.drawHomePortal();
+        } else if (this.currentScene === 'OASIS') {
+            this.drawOasis();
+            this.drawDoors();
         } else {
+            this.drawObstacles(); 
+            this.drawDoors();     
             this.drawEnemies(); 
         }
 
         this.drawHero(this.hero.x, this.hero.y);
-        
         this.ctx.restore();
         
         GameHUD.draw(this.rc, this.ctx, this.hero, this.currentScene);
         DialogueUI.draw(this.rc, this.ctx, this.frame, this.dialogue);
         
-        // 【改动 7：新增】绘制赐福三选一卡片
-        if (this.hero.state === 'BOON_SELECTION') {
-            BoonUI.draw(this.rc, this.ctx, this.currentBoons);
-        }
+        if (this.hero.state === 'BOON_SELECTION') BoonUI.draw(this.rc, this.ctx, this.currentBoons);
     }
 
     private drawMap() {
-        const bgColor = this.currentScene === 'HOME' ? '#f3f4f6' : '#e5e7eb';
+        // 根据不同场景，设置不同风格的底色
+        let bgColor = '#e5e7eb'; // BATTLE 灰色
+        if (this.currentScene === 'HOME') bgColor = '#f3f4f6'; // 明亮
+        else if (this.currentScene === 'OASIS') bgColor = '#ecfccb'; // 生机勃勃的浅绿色
+        
         const strokeColor = this.currentScene === 'HOME' ? '#d1d5db' : '#9ca3af';
 
         this.rc.rectangle(0, 0, this.mapWidth, this.mapHeight, {
@@ -278,9 +477,85 @@ export class GameEngine {
 
         if (this.currentScene === 'HOME') {
             this.rc.rectangle(300, 100, 200, 50, { fill: '#94a3b8', roughness: 1.5 });
-        } else {
-            this.rc.circle(200, 200, 60, { fill: '#d1d5db', roughness: 2 });
         }
+    }
+
+    // 【新增】绘制莲花池和交互提示
+    private drawOasis() {
+        const px = this.lotusPool.x;
+        const py = this.lotusPool.y;
+        
+        // 莲池水面
+        this.rc.ellipse(px, py, this.lotusPool.radius * 2.5, this.lotusPool.radius * 1.5, { 
+            fill: '#bae6fd', fillStyle: 'solid', stroke: '#38bdf8', strokeWidth: 2, roughness: 1.5 
+        });
+        
+        // 简单的莲花
+        this.rc.circle(px, py, 40, { fill: '#fbcfe8', fillStyle: 'solid', stroke: '#f472b6', strokeWidth: 2 });
+        this.rc.circle(px, py, 20, { fill: '#fce7f3', fillStyle: 'solid', stroke: '#f472b6', strokeWidth: 1 });
+
+        // 交互提示 (如果未被使用且玩家靠近)
+        const distPool = Math.sqrt(Math.pow(this.hero.x - px, 2) + Math.pow(this.hero.y - py, 2));
+        if (distPool < this.lotusPool.radius + 50 && !this.lotusPool.used) {
+            this.ctx.fillStyle = '#1f2937';
+            this.ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
+            this.ctx.fillText('[按 F 沐浴莲池恢复气血]', px - 95, py - 60);
+        }
+    }
+
+    private drawObstacles() {
+        for (const obs of this.obstacles) {
+            if (obs.type === 'ROCK') {
+                this.rc.circle(obs.x, obs.y, obs.radius * 2, { 
+                    fill: '#9ca3af', fillStyle: 'hachure', hachureAngle: 60, hachureGap: 4, roughness: 2.5, stroke: '#4b5563', strokeWidth: 2 
+                });
+                this.rc.polygon([[obs.x - obs.radius * 0.8, obs.y + obs.radius/2], [obs.x, obs.y - obs.radius], [obs.x + obs.radius * 0.8, obs.y + obs.radius/2]], { stroke: '#374151', strokeWidth: 2, roughness: 2 });
+            } else if (obs.type === 'BAMBOO') {
+                this.rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#dcfce7', fillStyle: 'solid', stroke: 'none', roughness: 2 });
+                for (let i=0; i<4; i++) {
+                    const bx = obs.x - obs.radius * 0.6 + (obs.radius * 0.4) * i + (Math.random() * 10 - 5);
+                    this.rc.line(bx, obs.y + obs.radius * 0.8, bx, obs.y - obs.radius * 1.2, { stroke: '#22c55e', strokeWidth: 4, roughness: 1.5 });
+                    this.rc.line(bx, obs.y - 10 + i*5, bx + 15, obs.y - 20 + i*5, { stroke: '#16a34a', strokeWidth: 2, roughness: 1 });
+                }
+            } else if (obs.type === 'POND') {
+                this.rc.ellipse(obs.x, obs.y, obs.radius * 2.5, obs.radius * 1.5, { 
+                    fill: '#bae6fd', fillStyle: 'hachure', hachureAngle: 0, hachureGap: 6, roughness: 1.5, stroke: '#38bdf8', strokeWidth: 2 
+                });
+                this.rc.curve([[obs.x - obs.radius/2, obs.y], [obs.x, obs.y + 5], [obs.x + obs.radius/2, obs.y - 5]], { stroke: '#0284c7', strokeWidth: 2, roughness: 1 });
+            }
+        }
+    }
+
+    private drawDoors() {
+        for (const door of this.doors) {
+            this.ctx.save();
+            this.ctx.translate(door.x, door.y);
+            this.ctx.rotate(this.frame * 0.05);
+            
+            const doorColor = door.rewardType === 'BOON' ? '#fbbf24' : '#10b981';
+            this.rc.ellipse(0, 0, door.radius*2, door.radius*2, { stroke: doorColor, strokeWidth: 4, roughness: 3, bowing: 2 });
+            this.rc.ellipse(0, 0, door.radius*1.5, door.radius*1.5, { stroke: doorColor, strokeWidth: 2, roughness: 2 });
+            this.ctx.restore();
+
+            this.ctx.fillStyle = door.rewardType === 'BOON' ? '#fbbf24' : '#10b981';
+            this.ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
+            const text = door.rewardType === 'BOON' ? '神明赐福' : '灵丹妙药';
+            this.ctx.fillText(text, door.x - 35, door.y - 60);
+        }
+    }
+
+    private drawHomePortal() {
+        if (!this.homePortal.active) return;
+        const px = this.homePortal.x; const py = this.homePortal.y;
+        this.ctx.save();
+        this.ctx.translate(px, py);
+        this.ctx.rotate(this.frame * 0.05);
+        this.rc.ellipse(0, 0, 80, 80, { stroke: '#8b5cf6', strokeWidth: 4, roughness: 3, bowing: 2 });
+        this.rc.ellipse(0, 0, 60, 60, { stroke: '#c4b5fd', strokeWidth: 2, roughness: 2 });
+        this.ctx.restore();
+        this.ctx.fillStyle = '#8b5cf6';
+        this.ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
+        this.ctx.fillText('前往试炼场', px - 40, py - 60);
     }
 
     private drawNPC() {
@@ -297,20 +572,6 @@ export class GameEngine {
             this.ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
             this.ctx.fillText('[按 F 交互]', nx - 35, ny - 80);
         }
-    }
-
-    private drawPortal() {
-        if (!this.portal.active) return;
-        const px = this.portal.x; const py = this.portal.y;
-        this.ctx.save();
-        this.ctx.translate(px, py);
-        this.ctx.rotate(this.frame * 0.05);
-        this.rc.ellipse(0, 0, 80, 80, { stroke: '#8b5cf6', strokeWidth: 4, roughness: 3, bowing: 2 });
-        this.rc.ellipse(0, 0, 60, 60, { stroke: '#c4b5fd', strokeWidth: 2, roughness: 2 });
-        this.ctx.restore();
-        this.ctx.fillStyle = '#8b5cf6';
-        this.ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
-        this.ctx.fillText('前往试炼场', px - 40, py - 60);
     }
 
     private drawEnemies() {
@@ -374,21 +635,16 @@ export class GameEngine {
             this.ctx.save();
             this.ctx.translate(cx, cy);
             this.ctx.rotate(Math.atan2(this.hero.dirY, this.hero.dirX));
-            // 【改动 6】冲刺速度线颜色改为 boonColor
             this.rc.line(-150, 0, -50, 0, { stroke: this.hero.boonColor, strokeWidth: 5, roughness: 3 });
-            // 【改动 6】冲刺主体边框改为 boonColor
             this.rc.polygon([[-40, -30], [50, 0], [-40, 30]], { fill: colors.red, fillStyle: 'hachure', hachureGap: 3, roughness: 3, stroke: this.hero.boonColor });
             this.ctx.restore();
         } else if (this.hero.state === 'ATTACKING') {
             this.ctx.save();
             this.ctx.translate(cx, cy);
             this.ctx.rotate(Math.atan2(this.hero.dirY, this.hero.dirX));
-            // 攻击前方的破空红线保留
             this.rc.line(30, -30, 160, -10, { stroke: colors.red, roughness: 3, strokeWidth: 2, bowing: 2 });
-            // 【改动 6】攻击前方的另外一条破空线改为 boonColor
             this.rc.line(40, 30, 150, 10, { stroke: this.hero.boonColor, roughness: 3, strokeWidth: 2, bowing: 2 });
             this.rc.line(-50, 0, 100, 0, { stroke: '#6b7280', strokeWidth: 6, roughness: 1 });
-            // 【改动 6】枪尖填充颜色改为 boonColor
             this.rc.polygon([[100, -15], [160, 0], [100, 15]], { fill: this.hero.boonColor, fillStyle: 'solid' });
             this.rc.ellipse(-20, 0, 60, 40, { fill: colors.red, fillStyle: 'hachure', roughness: 2 });
             this.rc.ellipse(-10, -20, 40, 40, { fill: colors.skin, fillStyle: 'solid', roughness: 1.5 });
