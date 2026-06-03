@@ -1,5 +1,18 @@
 // ...保留原有的 Enemy 和 DialogueLine 接口...
-export interface Enemy { /*...*/ id: number; x: number; y: number; hp: number; maxHp: number; radius: number; hitFlashTimer: number; speed: number; state: 'CHASING' | 'ATTACKING'; attackTimer: number; attackCooldown: number; dirX: number; dirY: number; }
+export interface Enemy {
+    id: number;
+    x: number; y: number;
+    hp: number; maxHp: number; radius: number;
+    hitFlashTimer: number; speed: number;
+    state: 'CHASING' | 'ATTACKING';
+    attackTimer: number; attackCooldown: number;
+    dirX: number; dirY: number;
+    
+    // 【新增】Boss 专属属性
+    isBoss?: boolean;
+    name?: string;
+    attackRound?: number; // 记录当前是第几轮攻击
+}
 export interface DialogueLine { /*...*/ speaker: string; text: string; color: string; }
 
 // --- 新增：神明赐福数据结构 ---

@@ -21,12 +21,17 @@ export class GameEngine {
     private screenW: number = 800;
     private screenH: number = 600;
 
+    // 关卡与剧情进度控制
+    private currentLevel: number = 1; 
+    private hasUnlockedSpear: boolean = false; 
+    private bossDefeatedNezha: boolean = false; 
+
     private currentScene: 'HOME' | 'BATTLE' | 'OASIS' = 'HOME';
 
     private hero = { 
         x: 400, y: 400, speed: 5, radius: 25,
         hp: 100, maxHp: 100, attack: 15, defense: 0, spiritStones: 0,
-        state: 'NORMAL', // 'NORMAL'|'DASHING'|'ATTACKING'|'DEAD'|'BOON_SELECTION'|'UPGRADING'
+        state: 'NORMAL', 
         dirX: 1, dirY: 0,
         dashTimer: 0, dashDuration: 12, dashSpeed: 20, dashCooldown: 0,
         attackTimer: 0, attackDuration: 15, attackCooldown: 0, attackThrustSpeed: 3,
@@ -78,6 +83,8 @@ export class GameEngine {
         this.hero.attackCooldown = 20;
         this.hero.hasDealtDamage = false;
         this.hero.boonColor = '#fbbf24'; 
+
+        this.currentLevel = 1; // 重置层数
         
         this.currentScene = 'HOME';
         this.hero.x = 400;
@@ -102,10 +109,21 @@ export class GameEngine {
         this.hero.x = this.mapWidth / 2; 
         this.hero.y = this.mapHeight - 150;
         
+        if (this.currentLevel === 5) {
+            this.obstacles = [];
+            this.enemies = [{ 
+                id: 999, x: this.mapWidth / 2, y: 300, hp: 9999, maxHp: 9999, radius: 50, 
+                hitFlashTimer: 0, speed: 1.5, state: 'CHASING', attackTimer: 0, attackCooldown: 100, 
+                dirX: 0, dirY: 0, isBoss: true, name: '太乙真人', attackRound: 0 
+            }];
+            return;
+        }
+
+        this.currentLevel++; 
+        
         this.obstacles = [];
         const types: ('ROCK' | 'BAMBOO' | 'POND')[] = ['ROCK', 'BAMBOO', 'POND'];
         const numObstacles = Math.floor(Math.random() * 4) + 6; 
-        
         for (let i = 0; i < numObstacles; i++) {
             let ox = 200 + Math.random() * (this.mapWidth - 400);
             let oy = 200 + Math.random() * (this.mapHeight - 400);
@@ -118,7 +136,6 @@ export class GameEngine {
             { id: 1, x: this.mapWidth / 2 - 200, y: 300, hp: 50, maxHp: 50, radius: 30, hitFlashTimer: 0, speed: 2, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 },
             { id: 2, x: this.mapWidth / 2 + 200, y: 300, hp: 50, maxHp: 50, radius: 30, hitFlashTimer: 0, speed: 2.5, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 },
             { id: 3, x: this.mapWidth / 2, y: 200, hp: 70, maxHp: 70, radius: 35, hitFlashTimer: 0, speed: 1.5, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 },
-            { id: 4, x: this.mapWidth / 2 - 300, y: 250, hp: 40, maxHp: 40, radius: 30, hitFlashTimer: 0, speed: 2.2, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0 }
         ];
     }
 
@@ -242,8 +259,20 @@ export class GameEngine {
                     { speaker: '系统', text: '（通往试炼场的传送门已开启）', color: '#4b5563' }
                 ]);
             } else if (distTaiyi < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
-                this.hero.state = 'UPGRADING';
-                this.dialogue.cooldown = 15;
+                // 【修复】：加入判定，是否触发传授武器剧情
+                if (this.bossDefeatedNezha && !this.hasUnlockedSpear) {
+                    this.startDialogue([
+                        { speaker: '太乙真人', text: '徒儿啊，你一直用真气凝聚长枪，难怪连为师一招都接不下！', color: '#10b981' },
+                        { speaker: '哪吒', text: '师傅偏心！乾坤圈和混天绫近战太吃亏了！', color: '#dc2626' },
+                        { speaker: '太乙真人', text: '罢了罢了，这柄真正的【火尖枪】便传授于你，去打破天命吧！', color: '#10b981' },
+                        { speaker: '系统', text: '（获得法宝：火尖枪。攻击力永久提升 20 点！）', color: '#fbbf24' }
+                    ]);
+                    this.hasUnlockedSpear = true;
+                    this.hero.attack += 20; 
+                } else {
+                    this.hero.state = 'UPGRADING';
+                    this.dialogue.cooldown = 15;
+                }
             }
 
             if (this.homePortal.active) {
@@ -384,7 +413,9 @@ export class GameEngine {
             if (enemy.hitFlashTimer > 0) enemy.hitFlashTimer--;
             if (enemy.attackCooldown > 0) enemy.attackCooldown--;
             if (enemy.hp <= 0 && enemy.hitFlashTimer <= 0) {
-                this.hero.spiritStones += Math.floor(Math.random() * 6) + 5;
+                if (!enemy.isBoss) {
+                    this.hero.spiritStones += Math.floor(Math.random() * 6) + 5;
+                }
                 this.enemies.splice(i, 1);
                 continue;
             }
@@ -409,20 +440,45 @@ export class GameEngine {
             this.checkObstacleCollision(enemy);
 
             if (enemy.state === 'CHASING') {
-                if (dist < 70 && enemy.attackCooldown <= 0) {
-                    enemy.state = 'ATTACKING'; enemy.attackTimer = 25;
+                const triggerDist = enemy.isBoss ? 400 : 70; 
+                if (dist < triggerDist && enemy.attackCooldown <= 0) {
+                    enemy.state = 'ATTACKING'; 
+                    enemy.attackTimer = enemy.isBoss ? 60 : 25; 
+                    if (enemy.isBoss) {
+                        enemy.attackRound = (enemy.attackRound || 0) + 1; 
+                    }
                 } else if (enemy.hitFlashTimer <= 0) {
                     enemy.x += enemy.dirX * enemy.speed; enemy.y += enemy.dirY * enemy.speed;
                 }
             } else if (enemy.state === 'ATTACKING') {
                 enemy.attackTimer--;
-                if (enemy.attackTimer === 10 && this.hero.state !== 'DASHING' && dist < 80) {
-                    const dmg = Math.max(1, 10 - this.hero.defense);
-                    this.hero.hp -= dmg;
-                    this.hero.hitFlashTimer = 10;
-                    if (this.hero.hp <= 0) { this.hero.hp = 0; this.hero.state = 'DEAD'; }
+                
+                if (enemy.isBoss && enemy.name === '太乙真人') {
+                    if (enemy.attackTimer === 30) {
+                        if (enemy.attackRound === 1) {
+                            if (dist < 300 && this.hero.state !== 'DASHING') {
+                                this.hero.hp -= 20;
+                                this.hero.hitFlashTimer = 10;
+                            }
+                        } else if (enemy.attackRound === 2) {
+                            this.bossDefeatedNezha = true;
+                            this.hero.hp = 0;
+                            this.hero.state = 'DEAD';
+                        }
+                    }
+                    if (enemy.attackTimer <= 0) {
+                        enemy.state = 'CHASING'; 
+                        enemy.attackCooldown = 80; 
+                    }
+                } else {
+                    if (enemy.attackTimer === 10 && this.hero.state !== 'DASHING' && dist < 80) {
+                        const dmg = Math.max(1, 10 - this.hero.defense);
+                        this.hero.hp -= dmg;
+                        this.hero.hitFlashTimer = 10;
+                        if (this.hero.hp <= 0) { this.hero.hp = 0; this.hero.state = 'DEAD'; }
+                    }
+                    if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 60; }
                 }
-                if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 60; }
             }
 
             if (this.hero.state !== 'DASHING') {
