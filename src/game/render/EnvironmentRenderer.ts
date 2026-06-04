@@ -79,4 +79,33 @@ export class EnvironmentRenderer {
             ctx.fillText('[按 F 沐浴莲池恢复气血]', pool.x - 95, pool.y - 60);
         }
     }
+
+    // 【修改】支持多武器切换的武器架
+    static drawWeaponRack(rc: any, ctx: CanvasRenderingContext2D, rack: any, hero: any, unlockedWeapons: string[]) {
+        // 画一个木制的武器架
+        rc.rectangle(rack.x - 40, rack.y - 10, 80, 20, { fill: '#78350f', fillStyle: 'hachure', roughness: 2, stroke: '#451a03' });
+        rc.line(rack.x - 30, rack.y, rack.x - 30, rack.y - 50, { stroke: '#451a03', strokeWidth: 5, roughness: 1.5 });
+        rc.line(rack.x + 30, rack.y, rack.x + 30, rack.y - 50, { stroke: '#451a03', strokeWidth: 5, roughness: 1.5 });
+        rc.line(rack.x - 40, rack.y - 40, rack.x + 40, rack.y - 40, { stroke: '#451a03', strokeWidth: 3, roughness: 1 });
+
+        // 武器名字映射
+        const weaponNames: Record<string, string> = {
+            'RING': '乾坤圈', 'SASH': '混天绫', 'SPEAR': '火尖枪', 'WHEELS': '风火轮'
+        };
+
+        // 画几道神秘的金光代表陈列的武器
+        rc.line(rack.x - 20, rack.y - 40, rack.x - 20, rack.y - 80, { stroke: '#fbbf24', strokeWidth: 2, roughness: 2 });
+        rc.line(rack.x + 20, rack.y - 40, rack.x + 20, rack.y - 70, { stroke: '#ef4444', strokeWidth: 2, roughness: 2 });
+
+        const dist = Math.sqrt(Math.pow(hero.x - rack.x, 2) + Math.pow(hero.y - rack.y, 2));
+        if (dist < 100) {
+            ctx.fillStyle = '#1f2937';
+            ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
+            // 找出下一个将要切换的武器
+            const currentIndex = unlockedWeapons.indexOf(hero.weapon);
+            const nextWeapon = unlockedWeapons[(currentIndex + 1) % unlockedWeapons.length];
+            
+            ctx.fillText(`[按 F 装备: ${weaponNames[nextWeapon]}]`, rack.x - 65, rack.y - 95);
+        }
+    }
 }

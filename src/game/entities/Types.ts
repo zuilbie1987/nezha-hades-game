@@ -1,4 +1,12 @@
 // ...保留原有的 Enemy 和 DialogueLine 接口...
+export interface EnemyProjectile {
+    x: number; y: number;
+    dirX: number; dirY: number;
+    speed: number; damage: number; radius: number;
+    ownerId: number; // 【新增】记录发射者的怪物 ID
+    bounces: number; // 【新增】记录反弹次数
+}
+
 export interface Enemy {
     id: number;
     x: number; y: number;
@@ -8,10 +16,11 @@ export interface Enemy {
     attackTimer: number; attackCooldown: number;
     dirX: number; dirY: number;
     
-    // 【新增】Boss 专属属性
+    // 【修改】加入怪物类型区分
+    enemyType?: 'MELEE' | 'RANGED' | 'BOSS'; 
     isBoss?: boolean;
     name?: string;
-    attackRound?: number; // 记录当前是第几轮攻击
+    attackRound?: number; 
 }
 export interface DialogueLine { /*...*/ speaker: string; text: string; color: string; }
 
@@ -40,4 +49,19 @@ export interface Door {
     y: number;
     radius: number;
     rewardType: 'BOON' | 'HEAL'; // 门后对应的奖励类型
+}
+
+export type WeaponType = 'SPEAR' | 'RING' | 'SASH' | 'WHEELS'; 
+
+export interface Projectile {
+    x: number; 
+    y: number;
+    dirX: number; 
+    dirY: number;
+    speed: number;
+    damage: number;       
+    bouncesLeft: number;  
+    hitEnemies: number[]; 
+    state: 'FLYING' | 'RETURNING'; 
+    color: string;        
 }
