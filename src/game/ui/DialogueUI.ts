@@ -1,34 +1,62 @@
-import type { DialogueLine } from '../entities/Types';
-
 export class DialogueUI {
-    static draw(rc: any, ctx: CanvasRenderingContext2D, frame: number, dialogue: { active: boolean, index: number, lines: DialogueLine[] }) {
-        if (!dialogue.active || !dialogue.lines[dialogue.index]) return;
+    static draw(rc: any, ctx: CanvasRenderingContext2D, frame: number, dialogue: any) {
+        if (!dialogue.active || dialogue.index >= dialogue.lines.length) return;
 
-        const currentLine = dialogue.lines[dialogue.index];
+        const line = dialogue.lines[dialogue.index];
         const screenW = window.innerWidth;
         const screenH = window.innerHeight;
+
+        const boxW = 600;
+        const boxH = 220; 
+        const boxX = (screenW - boxW) / 2;
+        const boxY = (screenH - boxH) / 2;
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fillRect(boxX, boxY, boxW, boxH);
         
-        const boxWidth = Math.min(800, screenW - 40);
-        const boxHeight = 150;
-        const boxX = (screenW - boxWidth) / 2;
-        const boxY = screenH - boxHeight - 40; // 固定在屏幕正下方
+        rc.rectangle(boxX, boxY, boxW, boxH, { stroke: line.color || '#374151', strokeWidth: 4, roughness: 2 });
+        rc.rectangle(boxX + 5, boxY + 5, boxW - 10, boxH - 10, { stroke: '#9ca3af', strokeWidth: 2, roughness: 1.5 });
 
-        rc.rectangle(boxX, boxY, boxWidth, boxHeight, {
-            fill: '#f8fafc', fillStyle: 'solid', stroke: '#333', strokeWidth: 4, roughness: 2, bowing: 1
-        });
+        ctx.fillStyle = line.color || '#1f2937';
+        ctx.font = 'bold 26px "Comic Sans MS", cursive, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(`【 ${line.speaker} 】`, boxX + 30, boxY + 45);
 
-        ctx.fillStyle = currentLine.color;
-        ctx.font = 'bold 28px "Comic Sans MS", cursive, sans-serif';
-        ctx.fillText(`${currentLine.speaker}：`, boxX + 30, boxY + 50);
+        ctx.fillStyle = '#374151';
+        ctx.font = '22px "Comic Sans MS", cursive, sans-serif';
+        
+        const maxWidth = boxW - 80; 
+        const lineHeight = 36;      
+        let textX = boxX + 40;
+        let textY = boxY + 100;
 
-        ctx.fillStyle = '#1f2937';
-        ctx.font = '24px "Comic Sans MS", cursive, sans-serif';
-        ctx.fillText(currentLine.text, boxX + 30, boxY + 100);
+        let currentLine = '';
+        const chars = line.text.split('');
+        
+        for (let i = 0; i < chars.length; i++) {
+            const testLine = currentLine + chars[i];
+            const metrics = ctx.measureText(testLine);
+            const testWidth = metrics.width;
 
-        if (frame % 60 < 30) {
-            ctx.fillStyle = '#9ca3af';
-            ctx.font = 'italic 16px "Comic Sans MS", cursive, sans-serif';
-            ctx.fillText('按 F 继续', boxX + boxWidth - 100, boxY + boxHeight - 20);
+            if (testWidth > maxWidth && i > 0) {
+                ctx.fillText(currentLine, textX, textY);
+                currentLine = chars[i]; 
+                textY += lineHeight;
+            } else {
+                currentLine = testLine;
+            }
         }
+        ctx.fillText(currentLine, textX, textY);
+
+        // 【修复】将 Date.now() 替换为基于 frame 变量的帧数计算
+        // 游戏引擎是 60 FPS，所以 frame % 60 < 30 正好是每秒钟前半秒显示，后半秒隐藏
+        if (frame % 60 < 30) {
+            ctx.fillStyle = '#6b7280';
+            ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
+            ctx.textAlign = 'right';
+            ctx.fillText('▼ 按 F 继续', boxX + boxW - 30, boxY + boxH - 25);
+        }
+        
+        ctx.textAlign = 'left';
     }
 }

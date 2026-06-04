@@ -39,12 +39,7 @@ export interface Boon {
 }
 
 // --- 新增：地形障碍物 ---
-export interface Obstacle {
-    x: number;
-    y: number;
-    radius: number;
-    type: 'ROCK' | 'BAMBOO' | 'POND'; // 新增：障碍物类型（山石、竹林、水潭）
-}
+export interface Obstacle { x: number; y: number; radius: number; type: 'ROCK' | 'BAMBOO' | 'POND' | 'CORAL'; }
 
 // --- 新增：奖励门 ---
 export interface Door {

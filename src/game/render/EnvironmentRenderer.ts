@@ -1,11 +1,17 @@
 import type { Obstacle, Door } from '../entities/Types';
 
 export class EnvironmentRenderer {
-    static drawMap(rc: any, scene: string, width: number, height: number) {
+    static drawMap(rc: any, scene: string, width: number, height: number, storyPhase: number) {
         let bgColor = '#e5e7eb'; 
-        if (scene === 'HOME') bgColor = '#f3f4f6'; 
-        else if (scene === 'OASIS') bgColor = '#ecfccb'; 
-        const strokeColor = scene === 'HOME' ? '#d1d5db' : '#9ca3af';
+        let strokeColor = '#9ca3af';
+        
+        if (scene === 'HOME') { bgColor = '#f3f4f6'; strokeColor = '#d1d5db'; }
+        else if (scene === 'OASIS') { bgColor = '#ecfccb'; }
+        else if (scene === 'BATTLE') {
+            // 【新增】东海场景颜色
+            bgColor = storyPhase === 0 ? '#e5e7eb' : '#ccfbf1'; 
+            strokeColor = storyPhase === 0 ? '#9ca3af' : '#5eead4';
+        }
 
         rc.rectangle(0, 0, width, height, {
             fill: bgColor, fillStyle: 'hachure', hachureAngle: 30, hachureGap: 15, roughness: 2, strokeWidth: 3, stroke: strokeColor
@@ -16,7 +22,6 @@ export class EnvironmentRenderer {
         }
     }
 
-    // 【修改】改为单体渲染，方便 Y 轴排序
     static drawObstacle(rc: any, obs: Obstacle) {
         if (obs.type === 'ROCK') {
             rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#9ca3af', fillStyle: 'hachure', hachureAngle: 60, hachureGap: 4, roughness: 2.5, stroke: '#4b5563', strokeWidth: 2 });
@@ -26,11 +31,14 @@ export class EnvironmentRenderer {
             for (let i=0; i<4; i++) {
                 const bx = obs.x - obs.radius * 0.6 + (obs.radius * 0.4) * i + (Math.random() * 10 - 5);
                 rc.line(bx, obs.y + obs.radius * 0.8, bx, obs.y - obs.radius * 1.2, { stroke: '#22c55e', strokeWidth: 4, roughness: 1.5 });
-                rc.line(bx, obs.y - 10 + i*5, bx + 15, obs.y - 20 + i*5, { stroke: '#16a34a', strokeWidth: 2, roughness: 1 });
             }
+        } else if (obs.type === 'CORAL') {
+            // 【新增】东海珊瑚
+            rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#fce7f3', fillStyle: 'solid', stroke: 'none', roughness: 2 });
+            rc.curve([[obs.x, obs.y], [obs.x - 20, obs.y - obs.radius], [obs.x - 10, obs.y - obs.radius - 20]], { stroke: '#f43f5e', strokeWidth: 8, roughness: 2 });
+            rc.curve([[obs.x, obs.y], [obs.x + 20, obs.y - obs.radius + 10], [obs.x + 30, obs.y - obs.radius - 10]], { stroke: '#f43f5e', strokeWidth: 6, roughness: 2 });
         } else if (obs.type === 'POND') {
             rc.ellipse(obs.x, obs.y, obs.radius * 2.5, obs.radius * 1.5, { fill: '#bae6fd', fillStyle: 'hachure', hachureAngle: 0, hachureGap: 6, roughness: 1.5, stroke: '#38bdf8', strokeWidth: 2 });
-            rc.curve([[obs.x - obs.radius/2, obs.y], [obs.x, obs.y + 5], [obs.x + obs.radius/2, obs.y - 5]], { stroke: '#0284c7', strokeWidth: 2, roughness: 1 });
         }
     }
 
@@ -43,7 +51,6 @@ export class EnvironmentRenderer {
             rc.ellipse(0, 0, door.radius*2, door.radius*2, { stroke: doorColor, strokeWidth: 4, roughness: 3, bowing: 2 });
             rc.ellipse(0, 0, door.radius*1.5, door.radius*1.5, { stroke: doorColor, strokeWidth: 2, roughness: 2 });
             ctx.restore();
-
             ctx.fillStyle = door.rewardType === 'BOON' ? '#fbbf24' : '#10b981';
             ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
             ctx.fillText(door.rewardType === 'BOON' ? '神明赐福' : '灵丹妙药', door.x - 35, door.y - 60);
@@ -60,13 +67,12 @@ export class EnvironmentRenderer {
         ctx.restore();
         ctx.fillStyle = '#8b5cf6';
         ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
-        ctx.fillText('前往试炼场', portal.x - 40, portal.y - 60);
+        ctx.fillText('前往试炼', portal.x - 35, portal.y - 60);
     }
 
     static drawOasis(rc: any, ctx: CanvasRenderingContext2D, hero: any, pool: any) {
         rc.ellipse(pool.x, pool.y, pool.radius * 2.5, pool.radius * 1.5, { fill: '#bae6fd', fillStyle: 'solid', stroke: '#38bdf8', strokeWidth: 2, roughness: 1.5 });
         rc.circle(pool.x, pool.y, 40, { fill: '#fbcfe8', fillStyle: 'solid', stroke: '#f472b6', strokeWidth: 2 });
-        rc.circle(pool.x, pool.y, 20, { fill: '#fce7f3', fillStyle: 'solid', stroke: '#f472b6', strokeWidth: 1 });
         
         const distPool = Math.sqrt(Math.pow(hero.x - pool.x, 2) + Math.pow(hero.y - pool.y, 2));
         if (distPool < pool.radius + 50 && !pool.used) {
@@ -83,7 +89,6 @@ export class EnvironmentRenderer {
         rc.line(rack.x - 40, rack.y - 40, rack.x + 40, rack.y - 40, { stroke: '#451a03', strokeWidth: 3, roughness: 1 });
 
         const weaponNames: Record<string, string> = { 'RING': '乾坤圈', 'SASH': '混天绫', 'SPEAR': '火尖枪', 'WHEELS': '风火轮' };
-
         rc.line(rack.x - 20, rack.y - 40, rack.x - 20, rack.y - 80, { stroke: '#fbbf24', strokeWidth: 2, roughness: 2 });
         rc.line(rack.x + 20, rack.y - 40, rack.x + 20, rack.y - 70, { stroke: '#ef4444', strokeWidth: 2, roughness: 2 });
 

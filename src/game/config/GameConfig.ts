@@ -1,20 +1,14 @@
 import type { DialogueLine } from '../entities/Types';
 
 export const GameConfig = {
-    // 基础数值设定
-    UPGRADE_COST: 50, // 太乙真人修炼消耗的灵石
-    STONE_DROP_MIN: 5, // 怪物掉落灵石下限
-    STONE_DROP_MAX: 10, // 怪物掉落灵石上限
+    UPGRADE_COST: 50,
+    STONE_DROP_MIN: 5,
+    STONE_DROP_MAX: 10,
 
-    // 武器展示名称
     WEAPON_NAMES: {
-        'RING': '乾坤圈',
-        'SASH': '混天绫',
-        'SPEAR': '火尖枪',
-        'WHEELS': '风火轮'
+        'RING': '乾坤圈', 'SASH': '混天绫', 'SPEAR': '火尖枪', 'WHEELS': '风火轮'
     } as Record<string, string>,
 
-    // 剧情剧本库
     DIALOGUES: {
         LI_JING: [
             { speaker: '李靖', text: '逆子！你又去哪里惹是生非了？', color: '#1d4ed8' },
@@ -36,6 +30,17 @@ export const GameConfig = {
 
         EMPTY_RACK: [
             { speaker: '系统', text: '武器架上空空如也，或许哪天能获得一把长柄神兵...', color: '#4b5563' }
+        ] as DialogueLine[],
+
+        // 【新增】Boss 战前剧情对话
+        BOSS_TAIYI_ENCOUNTER: [
+            { speaker: '太乙真人', text: '痴儿，你脑海中的暴戾之气太重，若破不了为师这九龙神火幻境，便乖乖回陈塘关禁闭吧！', color: '#10b981' },
+            { speaker: '哪吒', text: '胖师傅，你这幻境也太无聊了！看我砸碎它回到现世！', color: '#dc2626' }
+        ] as DialogueLine[],
+
+        BOSS_AOBING_ENCOUNTER: [
+            { speaker: '敖丙', text: '李哪吒！你这妖童竟敢来我东海生事，今日便要你神魂俱灭！', color: '#0ea5e9' },
+            { speaker: '哪吒', text: '小泥鳅，本少爷刚从幻境里憋了一肚子火，正愁没处发泄！抽了你的龙筋！', color: '#dc2626' }
         ] as DialogueLine[]
     }
 };
