@@ -6,6 +6,11 @@ export default defineConfig({
     outDir: 'dist',
   },
   server: {
-    port: 3000
+    host: true, // 相当于 host: '0.0.0.0'
+    port: parseInt(process.env.PORT || '8080'),
+  },
+  preview: {
+    host: true, // 必须开启，否则云端无法外部访问
+    port: parseInt(process.env.PORT || '8080'),
   }
 });
