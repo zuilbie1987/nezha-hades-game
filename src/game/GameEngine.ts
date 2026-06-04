@@ -22,6 +22,14 @@ export class GameEngine {
     private screenW: number = 800;
     private screenH: number = 600;
 
+    // 【新增】帧率独立与打击感系统
+    private lastTime: number = 0;
+    private accumulator: number = 0;
+    private readonly TIME_STEP: number = 1000 / 60; // 固定逻辑帧率为 60FPS
+    private hitStopTimer: number = 0; 
+    private shakeTimer: number = 0;
+    private shakeMagnitude: number = 0;
+
     private currentLevel: number = 1; 
     private taiyiDefeatCount: number = 0; 
     private unlockedWeapons: WeaponType[] = ['RING', 'SASH']; 
@@ -42,7 +50,6 @@ export class GameEngine {
     };
 
     private projectiles: Projectile[] = []; 
-    // 【新增】敌方弹幕池
     private enemyProjectiles: EnemyProjectile[] = []; 
 
     private npcLiJing = { x: 400, y: 200, radius: 40 };
@@ -82,6 +89,10 @@ export class GameEngine {
         this.ctx.scale(dpr, dpr);
     }
 
+    // 【新增】打击感触发器
+    private triggerHitStop(ms: number) { this.hitStopTimer = ms; }
+    private triggerScreenShake(ms: number, mag: number) { this.shakeTimer = ms; this.shakeMagnitude = mag; }
+
     private resurrect() {
         this.hero.hp = this.hero.maxHp;
         this.hero.state = 'NORMAL';
@@ -89,8 +100,16 @@ export class GameEngine {
         this.hero.attackCooldown = 20;
         this.hero.hasDealtDamage = false;
         this.hero.boonColor = '#fbbf24'; 
+        
+        // --- 清理子弹 ---
         this.projectiles = []; 
-        this.enemyProjectiles = []; // 清理弹幕
+        this.enemyProjectiles = []; 
+
+        // 【新增修复】：清空战场残留实体！彻底解决太乙真人跨场景追杀的 Bug
+        this.enemies = [];
+        this.obstacles = [];
+        this.doors = [];
+        this.roomCleared = false;
 
         this.currentLevel = 1; 
         this.currentScene = 'HOME';
@@ -114,7 +133,7 @@ export class GameEngine {
         this.expectedReward = rewardType;
         this.doors = []; 
         this.projectiles = [];
-        this.enemyProjectiles = []; // 进新房间清空弹幕
+        this.enemyProjectiles = [];
         this.hero.x = this.mapWidth / 2; 
         this.hero.y = this.mapHeight - 150;
         
@@ -245,7 +264,7 @@ export class GameEngine {
         } else if (this.currentScene === 'BATTLE') {
             this.updateEnemies();
             this.updateProjectiles(); 
-            this.updateEnemyProjectiles(); // 【新增】处理敌方子弹
+            this.updateEnemyProjectiles(); 
             this.checkDoors();
         } else if (this.currentScene === 'OASIS') {
             const distPool = Math.sqrt(Math.pow(this.hero.x - this.lotusPool.x, 2) + Math.pow(this.hero.y - this.lotusPool.y, 2));
@@ -259,50 +278,28 @@ export class GameEngine {
         this.updateHero();
     }
 
-    // 【修改】敌方子弹的更新与墙壁反弹逻辑
     private updateEnemyProjectiles() {
         for (let i = this.enemyProjectiles.length - 1; i >= 0; i--) {
             let p = this.enemyProjectiles[i];
-            
             p.x += p.dirX * p.speed;
             p.y += p.dirY * p.speed;
 
-            // 墙壁碰撞判定 (地图边界)
             if (p.x < 0 || p.x > this.mapWidth || p.y < 0 || p.y > this.mapHeight) {
-                // =============== 预留反弹与怪物升级接口 ===============
-                // 如果你想开启反弹机制，可以将下面这段代码取消注释：
-                /*
-                if (p.bounces < 2) { // 允许反弹 2 次
-                    p.bounces++;
-                    if (p.x < 0 || p.x > this.mapWidth) p.dirX *= -1; // 撞左右墙反弹
-                    if (p.y < 0 || p.y > this.mapHeight) p.dirY *= -1; // 撞上下墙反弹
-                    
-                    // 让发射它的怪物变强 (狂暴机制)
-                    const owner = this.enemies.find(e => e.id === p.ownerId);
-                    if (owner && owner.attackCooldown > 10) {
-                        owner.attackCooldown -= 10; // 冷却缩减，越射越快
-                        owner.speed += 0.2; // 移速加快
-                    }
-                    continue; // 发生反弹，不销毁子弹
-                }
-                */
-                // ====================================================
-
-                // 当前逻辑：超出边界直接销毁
                 this.enemyProjectiles.splice(i, 1);
                 continue;
             }
 
-            // 【注意】这里已经删除了普通障碍物的碰撞检查，子弹现在可以穿山越岭了！
-
-            // 击中主角判定 (主角如果是 DASHING 状态则无敌闪避穿透)
             const distToHero = Math.sqrt(Math.pow(p.x - this.hero.x, 2) + Math.pow(p.y - this.hero.y, 2));
             if (distToHero < p.radius + this.hero.radius && this.hero.state !== 'DASHING' && this.hero.state !== 'DEAD') {
                 const dmg = Math.max(1, p.damage - this.hero.defense);
                 this.hero.hp -= dmg;
                 this.hero.hitFlashTimer = 10;
-                if (this.hero.hp <= 0) { this.hero.hp = 0; this.hero.state = 'DEAD'; }
                 
+                // 【触发打击感】：受击时轻微震屏和卡肉
+                this.triggerHitStop(50);
+                this.triggerScreenShake(150, 4);
+
+                if (this.hero.hp <= 0) { this.hero.hp = 0; this.hero.state = 'DEAD'; }
                 this.enemyProjectiles.splice(i, 1);
             }
         }
@@ -342,6 +339,9 @@ export class GameEngine {
                     enemy.hp -= p.damage;
                     enemy.hitFlashTimer = 8;
                     p.hitEnemies.push(enemy.id);
+
+                    // 【触发打击感】：圈打中人时轻微震动
+                    this.triggerHitStop(30);
 
                     if (p.bouncesLeft > 0) {
                         p.bouncesLeft--;
@@ -455,6 +455,7 @@ export class GameEngine {
                 if (!this.hero.hasDealtDamage && this.hero.attackTimer > this.hero.attackDuration - 5) {
                     const hitboxX = this.hero.x + this.hero.dirX * 80;
                     const hitboxY = this.hero.y + this.hero.dirY * 80;
+                    let hitAny = false;
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; 
                         const dist = Math.sqrt(Math.pow(enemy.x - hitboxX, 2) + Math.pow(enemy.y - hitboxY, 2));
@@ -463,12 +464,19 @@ export class GameEngine {
                             enemy.hitFlashTimer = 8; 
                             enemy.x += this.hero.dirX * 20;
                             enemy.y += this.hero.dirY * 20;
+                            hitAny = true;
                         }
+                    }
+                    if (hitAny) {
+                        // 【触发打击感】：长枪突刺强烈顿帧与震动
+                        this.triggerHitStop(60);
+                        this.triggerScreenShake(100, 6);
                     }
                     this.hero.hasDealtDamage = true; 
                 }
             } else if (this.hero.weapon === 'SASH') {
                 if (this.hero.attackTimer === 15) { 
+                    let hitAny = false;
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; 
                         const dx = enemy.x - this.hero.x;
@@ -479,7 +487,12 @@ export class GameEngine {
                             enemy.hitFlashTimer = 8; 
                             enemy.x += this.hero.dirX * 40; 
                             enemy.y += this.hero.dirY * 40;
+                            hitAny = true;
                         }
+                    }
+                    if (hitAny) {
+                        this.triggerHitStop(80); // 混天绫势大力沉，顿帧最久
+                        this.triggerScreenShake(200, 5);
                     }
                 }
             } else if (this.hero.weapon === 'WHEELS') {
@@ -494,6 +507,7 @@ export class GameEngine {
                         if (dist < 60 + enemy.radius) {
                             enemy.hp -= this.hero.attack * 0.4; 
                             enemy.hitFlashTimer = 5; 
+                            this.triggerScreenShake(50, 2); // 风火轮轻微高频震动
                         }
                     }
                     this.hero.hasDealtDamage = true;
@@ -567,34 +581,30 @@ export class GameEngine {
 
             this.checkObstacleCollision(enemy);
 
-            // 【修改】高级怪物AI：远程怪懂拉扯，近战怪刚正面
             if (enemy.state === 'CHASING') {
                 if (enemy.enemyType === 'RANGED') {
                     const attackDist = 450;
                     const fleeDist = 200;
                     
-                    if (dist < fleeDist) { // 靠太近就跑避
+                    if (dist < fleeDist) { 
                         enemy.x -= enemy.dirX * enemy.speed * 1.2; 
                         enemy.y -= enemy.dirY * enemy.speed * 1.2;
-                    } else if (dist > attackDist) { // 太远就追
+                    } else if (dist > attackDist) { 
                         enemy.x += enemy.dirX * enemy.speed; 
                         enemy.y += enemy.dirY * enemy.speed;
                     }
                     
                     if (dist < attackDist && enemy.attackCooldown <= 0) {
                         enemy.state = 'ATTACKING';
-                        enemy.attackTimer = 30; // 较长的施法前摇
+                        enemy.attackTimer = 30; 
                     }
                 } 
-                // 近战和 Boss 逻辑
                 else {
                     const triggerDist = enemy.isBoss ? 400 : 70; 
                     if (dist < triggerDist && enemy.attackCooldown <= 0) {
                         enemy.state = 'ATTACKING'; 
                         enemy.attackTimer = enemy.isBoss ? 60 : 25; 
-                        if (enemy.isBoss) {
-                            enemy.attackRound = (enemy.attackRound || 0) + 1; 
-                        }
+                        if (enemy.isBoss) enemy.attackRound = (enemy.attackRound || 0) + 1; 
                     } else if (enemy.hitFlashTimer <= 0) {
                         enemy.x += enemy.dirX * enemy.speed; enemy.y += enemy.dirY * enemy.speed;
                     }
@@ -609,6 +619,7 @@ export class GameEngine {
                             if (dist < 300 && this.hero.state !== 'DASHING') {
                                 this.hero.hp -= 20;
                                 this.hero.hitFlashTimer = 10;
+                                this.triggerScreenShake(200, 6);
                             }
                         } else if (enemy.attackRound === 2) {
                             this.taiyiDefeatCount++;
@@ -621,14 +632,13 @@ export class GameEngine {
                         enemy.attackCooldown = 80; 
                     }
                 } 
-                // 【新增】远程怪发射子弹
                 else if (enemy.enemyType === 'RANGED') {
                     if (enemy.attackTimer === 10) {
                         this.enemyProjectiles.push({
                             x: enemy.x, y: enemy.y,
-                            dirX: enemy.dirX, dirY: enemy.dirY,
+                            dirX: enemy.dirX, dirY: enemy.dirY, 
                             speed: 8, damage: 15, radius: 10,
-                            ownerId: enemy.id, bounces: 0 
+                            ownerId: enemy.id, bounces: 0
                         });
                     }
                     if (enemy.attackTimer <= 0) {
@@ -636,12 +646,13 @@ export class GameEngine {
                         enemy.attackCooldown = 90; 
                     }
                 }
-                // 原有的近战怪打人
                 else {
                     if (enemy.attackTimer === 10 && this.hero.state !== 'DASHING' && dist < 80) {
                         const dmg = Math.max(1, 10 - this.hero.defense);
                         this.hero.hp -= dmg;
                         this.hero.hitFlashTimer = 10;
+                        this.triggerHitStop(40);
+                        this.triggerScreenShake(100, 4);
                         if (this.hero.hp <= 0) { this.hero.hp = 0; this.hero.state = 'DEAD'; }
                     }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 60; }
@@ -674,30 +685,60 @@ export class GameEngine {
         this.ctx.clearRect(0, 0, this.screenW, this.screenH); 
         this.ctx.save();
         
-        const cameraX = this.screenW / 2 - this.hero.x;
-        const cameraY = this.screenH / 2 - this.hero.y;
+        let cameraX = this.screenW / 2 - this.hero.x;
+        let cameraY = this.screenH / 2 - this.hero.y;
+        
+        // 【核心】应用震屏特效
+        if (this.shakeTimer > 0) {
+            cameraX += (Math.random() - 0.5) * this.shakeMagnitude * 2;
+            cameraY += (Math.random() - 0.5) * this.shakeMagnitude * 2;
+        }
         this.ctx.translate(cameraX, cameraY);
 
+        // 1. 绘制底层地图
         EnvironmentRenderer.drawMap(this.rc, this.currentScene, this.mapWidth, this.mapHeight);
         
+        // 【核心】2. 收集所有可渲染实体进行 Y-Sorting（深度排序）
+        const renderList: any[] = [];
+        renderList.push({ type: 'HERO', y: this.hero.y, obj: this.hero });
+        
+        for (const e of this.enemies) renderList.push({ type: 'ENEMY', y: e.y, obj: e });
+        // 障碍物的遮挡点在它的底部（y + radius）
+        for (const o of this.obstacles) renderList.push({ type: 'OBSTACLE', y: o.y + o.radius, obj: o });
+
         if (this.currentScene === 'HOME') {
-            EntityRenderer.drawNPCs(this.rc, this.ctx, this.hero, this.npcLiJing, this.npcTaiyi, this.dialogue.active);
-            EnvironmentRenderer.drawHomePortal(this.rc, this.ctx, this.homePortal, this.frame);
-            EnvironmentRenderer.drawWeaponRack(this.rc, this.ctx, this.weaponRack, this.hero, this.unlockedWeapons); 
+            renderList.push({ type: 'NPC_LI', y: this.npcLiJing.y, obj: this.npcLiJing });
+            renderList.push({ type: 'NPC_TAIYI', y: this.npcTaiyi.y, obj: this.npcTaiyi });
+            renderList.push({ type: 'RACK', y: this.weaponRack.y, obj: this.weaponRack });
+            EnvironmentRenderer.drawHomePortal(this.rc, this.ctx, this.homePortal, this.frame); // 传送门贴图在最底
         } else if (this.currentScene === 'OASIS') {
-            EnvironmentRenderer.drawOasis(this.rc, this.ctx, this.hero, this.lotusPool);
-            EnvironmentRenderer.drawDoors(this.rc, this.ctx, this.doors, this.frame);
-        } else {
-            EnvironmentRenderer.drawObstacles(this.rc, this.obstacles); 
-            EnvironmentRenderer.drawDoors(this.rc, this.ctx, this.doors, this.frame);     
-            EntityRenderer.drawEnemies(this.rc, this.ctx, this.enemies); 
-            // 【新增】渲染敌方弹幕
-            EntityRenderer.drawEnemyProjectiles(this.rc, this.ctx, this.enemyProjectiles, this.frame);
+            renderList.push({ type: 'POOL', y: this.lotusPool.y, obj: this.lotusPool });
         }
 
-        HeroRenderer.draw(this.rc, this.ctx, this.hero, this.frame, this.projectiles); 
+        // 依据 Y 轴排序，Y越小（越靠上）越先画，这样下方的物体就能正确遮挡上方的物体
+        renderList.sort((a, b) => a.y - b.y);
+
+        // 3. 按照排序后的结果依次绘制
+        for (const item of renderList) {
+            if (item.type === 'HERO') HeroRenderer.drawHero(this.rc, this.ctx, item.obj, this.frame);
+            else if (item.type === 'ENEMY') EntityRenderer.drawEnemy(this.rc, this.ctx, item.obj);
+            else if (item.type === 'OBSTACLE') EnvironmentRenderer.drawObstacle(this.rc, item.obj);
+            else if (item.type === 'NPC_LI') EntityRenderer.drawLiJing(this.rc, this.ctx, this.hero, item.obj, this.dialogue.active);
+            else if (item.type === 'NPC_TAIYI') EntityRenderer.drawTaiyi(this.rc, this.ctx, this.hero, item.obj, this.dialogue.active);
+            else if (item.type === 'RACK') EnvironmentRenderer.drawWeaponRack(this.rc, this.ctx, item.obj, this.hero, this.unlockedWeapons);
+            else if (item.type === 'POOL') EnvironmentRenderer.drawOasis(this.rc, this.ctx, this.hero, item.obj);
+        }
+
+        // 4. 绘制顶层悬浮物 (门和子弹)
+        if (this.currentScene !== 'HOME') {
+            EnvironmentRenderer.drawDoors(this.rc, this.ctx, this.doors, this.frame);     
+            EntityRenderer.drawEnemyProjectiles(this.rc, this.ctx, this.enemyProjectiles, this.frame);
+        }
+        HeroRenderer.drawProjectiles(this.rc, this.ctx, this.projectiles, this.frame); 
+
         this.ctx.restore();
         
+        // 5. 绘制游戏外框 HUD 界面
         GameHUD.draw(this.rc, this.ctx, this.hero, this.currentScene);
         DialogueUI.draw(this.rc, this.ctx, this.frame, this.dialogue);
         
@@ -705,11 +746,29 @@ export class GameEngine {
         if (this.hero.state === 'UPGRADING') UpgradeUI.draw(this.rc, this.ctx, this.hero);
     }
 
-    private gameLoop = () => {
-        this.update();
-        if (this.frame % 3 === 0) {
-            this.draw();
+    // 【核心】Fixed Timestep (固定步长循环) 彻底修复高刷屏倍速 Bug
+    private gameLoop = (timestamp: number) => {
+        if (!this.lastTime) this.lastTime = timestamp;
+        const dt = timestamp - this.lastTime;
+        this.lastTime = timestamp;
+
+        // 如果在顿帧（卡肉）期间，逻辑循环全部冻结
+        if (this.hitStopTimer > 0) {
+            this.hitStopTimer -= dt;
+        } else {
+            // 正常的画面震动时间流逝
+            if (this.shakeTimer > 0) this.shakeTimer -= dt;
+
+            // 固定步长累加器，确保任何刷新率的屏幕，物理与逻辑每秒都严格运行 60 次
+            this.accumulator += dt;
+            while (this.accumulator >= this.TIME_STEP) {
+                this.update();
+                this.accumulator -= this.TIME_STEP;
+            }
         }
+
+        // 渲染依然跟随显示器的实际刷新率进行
+        this.draw();
         requestAnimationFrame(this.gameLoop);
     }
 }

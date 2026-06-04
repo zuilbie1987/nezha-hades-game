@@ -1,7 +1,8 @@
 import type { Projectile } from '../entities/Types';
 
 export class HeroRenderer {
-    static draw(rc: any, ctx: CanvasRenderingContext2D, hero: any, frame: number, projectiles: Projectile[]) {
+    // 【修改】抽离本体渲染
+    static drawHero(rc: any, ctx: CanvasRenderingContext2D, hero: any, frame: number) {
         if (hero.state === 'DEAD') {
             const deathOpts = { roughness: 4, stroke: '#6b7280', strokeWidth: 2 };
             rc.ellipse(hero.x, hero.y + 20, 80, 40, { fill: '#9ca3af', fillStyle: 'hachure', hachureAngle: 0, ...deathOpts });
@@ -13,35 +14,20 @@ export class HeroRenderer {
         const isHit = hero.hitFlashTimer > 0;
         const colors = { red: isHit ? '#fef2f2' : '#dc2626', gold: isHit ? '#fef3c7' : '#fbbf24', skin: isHit ? '#ffedd5' : '#fed7aa', hair: isHit ? '#6b7280' : '#1f2937' };
 
-        // 1. 绘制飞行中的乾坤圈
-        for (const p of projectiles) {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.rotate(frame * 0.2); 
-            rc.circle(0, 0, 30, { stroke: p.color, strokeWidth: 5, roughness: 1.5 });
-            rc.circle(0, 0, 20, { stroke: '#fef3c7', strokeWidth: 2, roughness: 1 });
-            rc.curve([[0, 15], [-p.dirX * 30, 20], [-p.dirX * 50, 5]], { stroke: colors.red, strokeWidth: 3, roughness: 3 });
-            ctx.restore();
-        }
-
-        // 2. 绘制主角本体
         if (hero.state === 'NORMAL') {
             const breath = Math.sin(frame * 0.1) * 3;
             const rOpts = { roughness: isHit ? 3 : 1.5 }; 
             
-            // 武器待机外观
             if (hero.weapon === 'SPEAR') {
                 const spearY = hero.y - 30 + breath;
                 rc.line(hero.x - 80, spearY + 20, hero.x + 80, spearY - 25, { stroke: '#6b7280', strokeWidth: 5, ...rOpts });
-            } else if (hero.weapon === 'RING' && projectiles.length === 0) {
+            } else if (hero.weapon === 'RING' && hero.attackCooldown <= 10) { // 简单判断手里是否有圈
                 rc.circle(hero.x + 40, hero.y, 25, { stroke: colors.gold, strokeWidth: 4, ...rOpts });
             } else if (hero.weapon === 'SASH') {
-                // 混天绫：红色飘带环绕
                 const sashWave = Math.sin(frame * 0.05) * 10;
                 rc.curve([[hero.x - 60, hero.y + 20 - sashWave], [hero.x, hero.y + 40], [hero.x + 60, hero.y + 20 + sashWave]], { stroke: colors.red, strokeWidth: 6, roughness: 2 });
             }
 
-            // 基础脚部金轮 (如果装备了风火轮，加上火焰)
             rc.circle(hero.x - 30, hero.y + 80 + breath, 30, { stroke: colors.gold, strokeWidth: 3, ...rOpts });
             rc.circle(hero.x + 30, hero.y + 80 + breath, 30, { stroke: colors.gold, strokeWidth: 3, ...rOpts });
             if (hero.weapon === 'WHEELS') {
@@ -49,7 +35,6 @@ export class HeroRenderer {
                 rc.curve([[hero.x + 20, hero.y + 90], [hero.x + 30, hero.y + 60], [hero.x + 50, hero.y + 80]], { stroke: '#ef4444', strokeWidth: 3, roughness: 2 });
             }
 
-            // 身体与头部
             rc.polygon([[hero.x - 20, hero.y], [hero.x + 20, hero.y], [hero.x + 25, hero.y + 50], [hero.x - 25, hero.y + 50]], { fill: colors.red, fillStyle: 'hachure' });
             const headY = hero.y - 40 + breath;
             rc.ellipse(hero.x, headY, 70, 60, { fill: colors.skin, fillStyle: 'solid', ...rOpts });
@@ -85,18 +70,29 @@ export class HeroRenderer {
                 rc.ellipse(10, 0, 60, 50, { fill: colors.skin, fillStyle: 'solid', roughness: 1.5 });
                 rc.line(-20, 0, 40, 0, { stroke: colors.red, strokeWidth: 8, roughness: 2 });
             } else if (hero.weapon === 'SASH') {
-                // 混天绫横扫特效
                 rc.ellipse(10, 0, 60, 50, { fill: colors.skin, fillStyle: 'solid', roughness: 1.5 });
-                const sweep = 180 - (hero.attackTimer * 6); // 动态扇形特效
+                const sweep = 180 - (hero.attackTimer * 6); 
                 rc.curve([[0, 0], [sweep, -80], [sweep + 40, 0], [sweep, 80], [0, 0]], { fill: 'rgba(220, 38, 38, 0.5)', fillStyle: 'solid', stroke: colors.red, strokeWidth: 4, roughness: 3 });
             } else if (hero.weapon === 'WHEELS') {
-                // 风火轮旋风突进
                 rc.circle(0, 0, 80, { stroke: '#ef4444', strokeWidth: 6, roughness: 4 });
                 rc.circle(0, 0, 60, { stroke: '#fbbf24', strokeWidth: 4, roughness: 3 });
                 rc.polygon([[-40, -40], [60, 0], [-40, 40]], { fill: colors.red, fillStyle: 'hachure', stroke: 'none' });
             }
             
             if (hero.weapon !== 'WHEELS') rc.ellipse(-20, 0, 60, 40, { fill: colors.red, fillStyle: 'hachure', roughness: 2 });
+            ctx.restore();
+        }
+    }
+
+    // 【新增】抽离乾坤圈渲染
+    static drawProjectiles(rc: any, ctx: CanvasRenderingContext2D, projectiles: Projectile[], frame: number) {
+        for (const p of projectiles) {
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(frame * 0.2); 
+            rc.circle(0, 0, 30, { stroke: p.color, strokeWidth: 5, roughness: 1.5 });
+            rc.circle(0, 0, 20, { stroke: '#fef3c7', strokeWidth: 2, roughness: 1 });
+            rc.curve([[0, 15], [-p.dirX * 30, 20], [-p.dirX * 50, 5]], { stroke: '#dc2626', strokeWidth: 3, roughness: 3 });
             ctx.restore();
         }
     }

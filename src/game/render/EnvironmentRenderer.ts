@@ -1,6 +1,3 @@
-// src/game/render/EnvironmentRenderer.ts
-// 负责绘制环境元素，如地图、障碍物、传送门等
-
 import type { Obstacle, Door } from '../entities/Types';
 
 export class EnvironmentRenderer {
@@ -19,22 +16,21 @@ export class EnvironmentRenderer {
         }
     }
 
-    static drawObstacles(rc: any, obstacles: Obstacle[]) {
-        for (const obs of obstacles) {
-            if (obs.type === 'ROCK') {
-                rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#9ca3af', fillStyle: 'hachure', hachureAngle: 60, hachureGap: 4, roughness: 2.5, stroke: '#4b5563', strokeWidth: 2 });
-                rc.polygon([[obs.x - obs.radius * 0.8, obs.y + obs.radius/2], [obs.x, obs.y - obs.radius], [obs.x + obs.radius * 0.8, obs.y + obs.radius/2]], { stroke: '#374151', strokeWidth: 2, roughness: 2 });
-            } else if (obs.type === 'BAMBOO') {
-                rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#dcfce7', fillStyle: 'solid', stroke: 'none', roughness: 2 });
-                for (let i=0; i<4; i++) {
-                    const bx = obs.x - obs.radius * 0.6 + (obs.radius * 0.4) * i + (Math.random() * 10 - 5);
-                    rc.line(bx, obs.y + obs.radius * 0.8, bx, obs.y - obs.radius * 1.2, { stroke: '#22c55e', strokeWidth: 4, roughness: 1.5 });
-                    rc.line(bx, obs.y - 10 + i*5, bx + 15, obs.y - 20 + i*5, { stroke: '#16a34a', strokeWidth: 2, roughness: 1 });
-                }
-            } else if (obs.type === 'POND') {
-                rc.ellipse(obs.x, obs.y, obs.radius * 2.5, obs.radius * 1.5, { fill: '#bae6fd', fillStyle: 'hachure', hachureAngle: 0, hachureGap: 6, roughness: 1.5, stroke: '#38bdf8', strokeWidth: 2 });
-                rc.curve([[obs.x - obs.radius/2, obs.y], [obs.x, obs.y + 5], [obs.x + obs.radius/2, obs.y - 5]], { stroke: '#0284c7', strokeWidth: 2, roughness: 1 });
+    // 【修改】改为单体渲染，方便 Y 轴排序
+    static drawObstacle(rc: any, obs: Obstacle) {
+        if (obs.type === 'ROCK') {
+            rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#9ca3af', fillStyle: 'hachure', hachureAngle: 60, hachureGap: 4, roughness: 2.5, stroke: '#4b5563', strokeWidth: 2 });
+            rc.polygon([[obs.x - obs.radius * 0.8, obs.y + obs.radius/2], [obs.x, obs.y - obs.radius], [obs.x + obs.radius * 0.8, obs.y + obs.radius/2]], { stroke: '#374151', strokeWidth: 2, roughness: 2 });
+        } else if (obs.type === 'BAMBOO') {
+            rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#dcfce7', fillStyle: 'solid', stroke: 'none', roughness: 2 });
+            for (let i=0; i<4; i++) {
+                const bx = obs.x - obs.radius * 0.6 + (obs.radius * 0.4) * i + (Math.random() * 10 - 5);
+                rc.line(bx, obs.y + obs.radius * 0.8, bx, obs.y - obs.radius * 1.2, { stroke: '#22c55e', strokeWidth: 4, roughness: 1.5 });
+                rc.line(bx, obs.y - 10 + i*5, bx + 15, obs.y - 20 + i*5, { stroke: '#16a34a', strokeWidth: 2, roughness: 1 });
             }
+        } else if (obs.type === 'POND') {
+            rc.ellipse(obs.x, obs.y, obs.radius * 2.5, obs.radius * 1.5, { fill: '#bae6fd', fillStyle: 'hachure', hachureAngle: 0, hachureGap: 6, roughness: 1.5, stroke: '#38bdf8', strokeWidth: 2 });
+            rc.curve([[obs.x - obs.radius/2, obs.y], [obs.x, obs.y + 5], [obs.x + obs.radius/2, obs.y - 5]], { stroke: '#0284c7', strokeWidth: 2, roughness: 1 });
         }
     }
 
@@ -80,20 +76,14 @@ export class EnvironmentRenderer {
         }
     }
 
-    // 【修改】支持多武器切换的武器架
     static drawWeaponRack(rc: any, ctx: CanvasRenderingContext2D, rack: any, hero: any, unlockedWeapons: string[]) {
-        // 画一个木制的武器架
         rc.rectangle(rack.x - 40, rack.y - 10, 80, 20, { fill: '#78350f', fillStyle: 'hachure', roughness: 2, stroke: '#451a03' });
         rc.line(rack.x - 30, rack.y, rack.x - 30, rack.y - 50, { stroke: '#451a03', strokeWidth: 5, roughness: 1.5 });
         rc.line(rack.x + 30, rack.y, rack.x + 30, rack.y - 50, { stroke: '#451a03', strokeWidth: 5, roughness: 1.5 });
         rc.line(rack.x - 40, rack.y - 40, rack.x + 40, rack.y - 40, { stroke: '#451a03', strokeWidth: 3, roughness: 1 });
 
-        // 武器名字映射
-        const weaponNames: Record<string, string> = {
-            'RING': '乾坤圈', 'SASH': '混天绫', 'SPEAR': '火尖枪', 'WHEELS': '风火轮'
-        };
+        const weaponNames: Record<string, string> = { 'RING': '乾坤圈', 'SASH': '混天绫', 'SPEAR': '火尖枪', 'WHEELS': '风火轮' };
 
-        // 画几道神秘的金光代表陈列的武器
         rc.line(rack.x - 20, rack.y - 40, rack.x - 20, rack.y - 80, { stroke: '#fbbf24', strokeWidth: 2, roughness: 2 });
         rc.line(rack.x + 20, rack.y - 40, rack.x + 20, rack.y - 70, { stroke: '#ef4444', strokeWidth: 2, roughness: 2 });
 
@@ -101,10 +91,8 @@ export class EnvironmentRenderer {
         if (dist < 100) {
             ctx.fillStyle = '#1f2937';
             ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
-            // 找出下一个将要切换的武器
             const currentIndex = unlockedWeapons.indexOf(hero.weapon);
             const nextWeapon = unlockedWeapons[(currentIndex + 1) % unlockedWeapons.length];
-            
             ctx.fillText(`[按 F 装备: ${weaponNames[nextWeapon]}]`, rack.x - 65, rack.y - 95);
         }
     }
