@@ -21,6 +21,9 @@ export interface Enemy {
     isBoss?: boolean;
     name?: string;
     attackRound?: number; 
+    // 【新增】元素异常状态计时器（单位：逻辑帧）
+    burnTimer?: number;   // 燃烧剩余时间
+    frostTimer?: number;  // 冰冻减速剩余时间
 }
 export interface DialogueLine { /*...*/ speaker: string; text: string; color: string; }
 
@@ -65,3 +68,6 @@ export interface Projectile {
     state: 'FLYING' | 'RETURNING'; 
     color: string;        
 }
+// 【新增】元素类型定义
+export type ElementType = 'NORMAL' | 'FIRE' | 'THUNDER' | 'ICE';
+

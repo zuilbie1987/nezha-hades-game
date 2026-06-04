@@ -1,7 +1,6 @@
 import type { Enemy, EnemyProjectile } from '../entities/Types';
 
 export class EntityRenderer {
-    // 【修改】改为单体渲染
     static drawEnemy(rc: any, ctx: CanvasRenderingContext2D, enemy: Enemy) {
         if (enemy.isBoss && enemy.name === '太乙真人') {
             ctx.save();
@@ -31,6 +30,25 @@ export class EntityRenderer {
             const currentHpWidth = (enemy.hp / enemy.maxHp) * hpBarWidth;
             rc.rectangle(-hpBarWidth/2, -130, hpBarWidth, 8, { fill: '#374151', fillStyle: 'solid', roughness: 0.5 });
             rc.rectangle(-hpBarWidth/2, -130, currentHpWidth, 8, { fill: '#10b981', fillStyle: 'solid', roughness: 0.5, stroke: 'none' });
+            
+            // ====== 【新增】Boss 异常状态视觉特效 ======
+            if (enemy.burnTimer && enemy.burnTimer > 0) {
+                ctx.fillStyle = '#f97316';
+                for (let i = 0; i < 6; i++) { // Boss体积大，火球多画几个
+                    const fx = (Math.random() - 0.5) * enemy.radius * 2;
+                    const fy = -50 - Math.random() * enemy.radius * 1.5;
+                    ctx.beginPath();
+                    ctx.arc(fx, fy, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            if (enemy.frostTimer && enemy.frostTimer > 0) {
+                rc.rectangle(-enemy.radius/1.5, -90, enemy.radius * 1.3, 100, {
+                    fill: 'rgba(56, 189, 248, 0.3)', fillStyle: 'solid', stroke: '#0ea5e9', strokeWidth: 3, roughness: 1.5
+                });
+            }
+            // ==========================================
+
             ctx.restore();
             return;
         }
@@ -60,6 +78,25 @@ export class EntityRenderer {
         const headColor = isAttacking ? (isRanged ? '#a855f7' : '#f87171') : '#d1d5db';
         if (isRanged) rc.polygon([[-20, -60], [20, -60], [20, -20], [-20, -20]], { fill: headColor, fillStyle: 'solid', roughness: roughLevel, stroke: strokeColor, strokeWidth: 2 });
         else rc.circle(0, -35, 30, { fill: headColor, fillStyle: 'solid', roughness: roughLevel, stroke: strokeColor, strokeWidth: 2 });
+
+        // ====== 【新增】普通怪物异常状态视觉特效 ======
+        if (enemy.burnTimer && enemy.burnTimer > 0) {
+            ctx.fillStyle = '#f97316';
+            for (let i = 0; i < 3; i++) {
+                const fx = (Math.random() - 0.5) * enemy.radius * 1.2;
+                const fy = -20 - Math.random() * enemy.radius;
+                ctx.beginPath();
+                ctx.arc(fx, fy, 6, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+        if (enemy.frostTimer && enemy.frostTimer > 0) {
+            rc.rectangle(-enemy.radius/2, -40, enemy.radius, 50, {
+                fill: 'rgba(56, 189, 248, 0.3)', fillStyle: 'solid', stroke: '#0ea5e9', strokeWidth: 2, roughness: 1
+            });
+        }
+        // ==========================================
+
         ctx.restore();
     }
 
@@ -74,7 +111,14 @@ export class EntityRenderer {
         }
     }
 
-    // 【修改】拆分李靖渲染
+    static drawLightningArcs(rc: any, lightnings: any[]) {
+        for (const l of lightnings) {
+            rc.line(l.x1, l.y1, l.x2, l.y2, {
+                stroke: '#eab308', strokeWidth: 4, roughness: 3, bowing: 2
+            });
+        }
+    }
+
     static drawLiJing(rc: any, ctx: CanvasRenderingContext2D, hero: any, npcLiJing: any, dialogueActive: boolean) {
         const nx = npcLiJing.x; const ny = npcLiJing.y;
         rc.rectangle(nx - 20, ny - 30, 40, 70, { fill: '#3b82f6', fillStyle: 'hachure', roughness: 1 });
@@ -96,7 +140,6 @@ export class EntityRenderer {
         ctx.textAlign = 'left';
     }
 
-    // 【修改】拆分太乙真人渲染
     static drawTaiyi(rc: any, ctx: CanvasRenderingContext2D, hero: any, npcTaiyi: any, dialogueActive: boolean) {
         const tx = npcTaiyi.x; const ty = npcTaiyi.y;
         rc.ellipse(tx, ty - 25, 60, 70, { fill: '#10b981', fillStyle: 'hachure', roughness: 1.5 }); 
