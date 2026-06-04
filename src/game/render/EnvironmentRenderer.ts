@@ -5,21 +5,45 @@ export class EnvironmentRenderer {
         let bgColor = '#e5e7eb'; 
         let strokeColor = '#9ca3af';
         
-        if (scene === 'HOME') { bgColor = '#f3f4f6'; strokeColor = '#d1d5db'; }
+        if (scene === 'HOME') { 
+            // ================= 陈塘关总兵府 豪华装修版 =================
+            // 0. 基础底色
+            rc.rectangle(0, 0, width, height, { fill: '#f3f4f6', fillStyle: 'hachure', hachureAngle: 30, hachureGap: 15, roughness: 2, strokeWidth: 3, stroke: '#d1d5db' });
+
+            // 1. 外围城墙与城垛
+            rc.rectangle(20, 20, width - 40, height - 40, { stroke: '#4b5563', strokeWidth: 6, roughness: 2.5 });
+            rc.rectangle(40, 40, width - 80, height - 80, { stroke: '#9ca3af', strokeWidth: 2, roughness: 1.5 });
+            for (let i = 60; i < width - 60; i += 100) {
+                rc.rectangle(i, 20, 60, 20, { fill: '#6b7280', fillStyle: 'solid', stroke: '#374151', roughness: 1 });
+            }
+
+            // 2. 十字青石板主干道
+            rc.line(width / 2, 350, width / 2, height - 80, { stroke: '#d1d5db', strokeWidth: 50, roughness: 2 });
+            rc.line(80, 600, width - 80, 600, { stroke: '#d1d5db', strokeWidth: 50, roughness: 2 });
+            rc.circle(width / 2, 600, 100, { stroke: '#9ca3af', strokeWidth: 4, roughness: 2 });
+
+            // 3. 正北：中军总兵府 (李靖区)
+            rc.rectangle(width / 2 - 250, 80, 500, 270, { fill: '#e5e7eb', fillStyle: 'solid', stroke: '#9ca3af', strokeWidth: 4, roughness: 2 });
+            rc.rectangle(width / 2 - 200, 120, 400, 190, { fill: '#cbd5e1', fillStyle: 'cross-hatch', stroke: '#6b7280' });
+
+            // 4. 西南：演武场 (武器架区)
+            rc.rectangle(80, 400, width / 2 - 130, 450, { fill: '#fef2f2', fillStyle: 'zigzag', hachureGap: 10, stroke: '#fca5a5', strokeWidth: 3, roughness: 2 });
+            
+            // 5. 东南：修心苑 (太乙真人与莲池区)
+            rc.rectangle(width / 2 + 50, 400, width / 2 - 130, 450, { fill: '#f0fdf4', fillStyle: 'dots', stroke: '#86efac', strokeWidth: 3, roughness: 2 });
+            
+            return; // 陈塘关绘制完毕，直接返回
+        }
         else if (scene === 'OASIS') { bgColor = '#ecfccb'; }
         else if (scene === 'BATTLE') {
-            // 【新增】东海场景颜色
             bgColor = storyPhase === 0 ? '#e5e7eb' : '#ccfbf1'; 
             strokeColor = storyPhase === 0 ? '#9ca3af' : '#5eead4';
         }
 
+        // 战斗房间和绿洲的基础背景
         rc.rectangle(0, 0, width, height, {
             fill: bgColor, fillStyle: 'hachure', hachureAngle: 30, hachureGap: 15, roughness: 2, strokeWidth: 3, stroke: strokeColor
         });
-
-        if (scene === 'HOME') {
-            rc.rectangle(300, 100, 200, 50, { fill: '#94a3b8', roughness: 1.5 });
-        }
     }
 
     static drawObstacle(rc: any, obs: Obstacle) {
@@ -33,7 +57,6 @@ export class EnvironmentRenderer {
                 rc.line(bx, obs.y + obs.radius * 0.8, bx, obs.y - obs.radius * 1.2, { stroke: '#22c55e', strokeWidth: 4, roughness: 1.5 });
             }
         } else if (obs.type === 'CORAL') {
-            // 【新增】东海珊瑚
             rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#fce7f3', fillStyle: 'solid', stroke: 'none', roughness: 2 });
             rc.curve([[obs.x, obs.y], [obs.x - 20, obs.y - obs.radius], [obs.x - 10, obs.y - obs.radius - 20]], { stroke: '#f43f5e', strokeWidth: 8, roughness: 2 });
             rc.curve([[obs.x, obs.y], [obs.x + 20, obs.y - obs.radius + 10], [obs.x + 30, obs.y - obs.radius - 10]], { stroke: '#f43f5e', strokeWidth: 6, roughness: 2 });
@@ -99,6 +122,22 @@ export class EnvironmentRenderer {
             const currentIndex = unlockedWeapons.indexOf(hero.weapon);
             const nextWeapon = unlockedWeapons[(currentIndex + 1) % unlockedWeapons.length];
             ctx.fillText(`[按 F 装备: ${weaponNames[nextWeapon]}]`, rack.x - 65, rack.y - 95);
+        }
+    }
+
+    static drawHomeLotusPool(rc: any, ctx: CanvasRenderingContext2D, pool: any, hero: any, costs: number[]) {
+        rc.ellipse(pool.x, pool.y, pool.radius * 2, pool.radius * 1.5, { fill: '#fbcfe8', fillStyle: 'hachure', hachureAngle: 45, hachureGap: 5, stroke: '#f472b6', strokeWidth: 3, roughness: 2 });
+        rc.circle(pool.x, pool.y - 10, 30, { fill: '#f472b6', fillStyle: 'solid', stroke: '#db2777', strokeWidth: 2 });
+
+        const dist = Math.sqrt(Math.pow(hero.x - pool.x, 2) + Math.pow(hero.y - pool.y, 2));
+        if (dist < pool.radius + 50 && hero.state !== 'UPGRADING') {
+            ctx.fillStyle = '#1f2937';
+            ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
+            if (hero.maxRevives < 3) {
+                ctx.fillText(`[按 F 消耗 ${costs[hero.maxRevives]} 灵石凝聚本命莲花]`, pool.x - 120, pool.y - 60);
+            } else {
+                ctx.fillText(`[七宝莲池：本命莲花已至大乘]`, pool.x - 110, pool.y - 60);
+            }
         }
     }
 }

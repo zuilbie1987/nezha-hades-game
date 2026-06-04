@@ -5,6 +5,9 @@ export const GameConfig = {
     STONE_DROP_MIN: 5,
     STONE_DROP_MAX: 10,
 
+    // 【新增】七宝莲池复活次数解锁价格（第1次，第2次，第3次）
+    REVIVE_COSTS: [30, 100, 300],
+
     WEAPON_NAMES: {
         'RING': '乾坤圈', 'SASH': '混天绫', 'SPEAR': '火尖枪', 'WHEELS': '风火轮'
     } as Record<string, string>,

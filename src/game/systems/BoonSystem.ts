@@ -5,15 +5,14 @@ export class BoonSystem {
     private static pool: Boon[] = [
         {
             id: 'b1', 
-            god: '太乙真人', 
-            name: '醉仙望月', 
-            // 结合：太乙的蓝色仙力化作火焰，附加持续燃烧，同时提升血量
-            description: '攻击附带蓝色仙火(燃烧)，生命上限永久增加30点。', 
-            color: '#3b82f6',
+            god: '魔童本源', 
+            name: '乾坤逆脉', 
+            description: '释放封印的三昧真火(燃烧)，生命上限永久增加30点。', 
+            color: '#ef4444',
             apply: (hero) => { 
                 hero.maxHp += 30; 
                 hero.hp += 30; 
-                hero.boonColor = '#3b82f6'; 
+                hero.boonColor = '#ef4444'; 
                 hero.element = 'FIRE'; // 赋予火焰元素（DoT流血）
             }
         },
@@ -45,10 +44,9 @@ export class BoonSystem {
         },
         {
             id: 'b4', 
-            god: '女娲', 
-            name: '生生不息', 
-            // 结合：作为大地之母，提供纯粹的生存保障，且不破坏玩家当前的元素流派
-            description: '获得造化之力，你的血量瞬间恢复满状态，且保留当前武器元素。', 
+            god: '殷夫人', 
+            name: '慈母连心', 
+            description: '获得母亲跨越战场的坚强守护，血量瞬间恢复满状态，且保留武器元素。', 
             color: '#10b981',
             apply: (hero) => { 
                 hero.hp = hero.maxHp; 

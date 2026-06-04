@@ -27,25 +27,28 @@ export class GameEngine {
     private currentScene: 'HOME' | 'BATTLE' | 'OASIS' = 'HOME';
 
     private hero = { 
-        x: 400, y: 400, speed: 5, radius: 25,
+        x: 800, y: 600, speed: 5, radius: 25, // 【修改】初始出生点为地图中心
         hp: 100, maxHp: 100, attack: 15, defense: 0, spiritStones: 0,
         state: 'NORMAL', dirX: 1, dirY: 0,
         dashTimer: 0, dashDuration: 8, dashSpeed: 15, dashCooldown: 0,
         attackTimer: 0, attackDuration: 15, attackCooldown: 0, attackThrustSpeed: 3,
         hasDealtDamage: false, hitFlashTimer: 0,
         boonColor: '#fbbf24', weapon: 'RING' as WeaponType, ringBounces: 3, 
-        element: 'NORMAL' as ElementType
+        element: 'NORMAL' as ElementType,
+        maxRevives: 0, currentRevives: 0, reviveTimer: 0
     };
 
     private projectiles: Projectile[] = []; 
     private enemyProjectiles: EnemyProjectile[] = []; 
     private lightnings: { x1: number, y1: number, x2: number, y2: number, duration: number }[] = [];
 
-    private npcLiJing = { x: 400, y: 200, radius: 40 };
-    private npcTaiyi = { x: 1000, y: 300, radius: 50 }; 
-    private weaponRack = { x: 200, y: 300, radius: 40 }; 
+    // ====== 【修改】将所有陈塘关实体按区域重新安放 ======
+    private npcLiJing = { x: 800, y: 220, radius: 40 };       // 正北方：总兵府
+    private weaponRack = { x: 350, y: 550, radius: 40 };      // 西南方：演武场
+    private npcTaiyi = { x: 1250, y: 480, radius: 50 };       // 东南方：修心苑上部
+    private homeLotusPool = { x: 1250, y: 720, radius: 50 };  // 东南方：修心苑下部
+    private homePortal = { x: 800, y: 950, radius: 40, active: false }; // 正南方：传送门
     
-    private homePortal = { x: 800, y: 200, radius: 40, active: false };
     private lotusPool = { x: 800, y: 600, radius: 80, used: false };
     private dialogue = { active: false, index: 0, lines: [] as DialogueLine[], cooldown: 0 };
     
@@ -84,13 +87,32 @@ export class GameEngine {
         }
     }
 
+    private handleHeroDeath() {
+        if (this.hero.hp <= 0 && this.hero.state !== 'DEAD') {
+            if (this.hero.currentRevives > 0) {
+                this.hero.currentRevives--;
+                this.hero.hp = this.hero.maxHp; 
+                this.hero.state = 'REVIVING';   
+                this.hero.reviveTimer = 90;     
+                this.hero.hitFlashTimer = 0;
+                this.triggerHitStop(30);
+                this.triggerScreenShake(300, 8);
+            } else {
+                this.hero.hp = 0;
+                this.hero.state = 'DEAD';
+            }
+        }
+    }
+
     private resurrect() {
         this.hero.hp = this.hero.maxHp; this.hero.state = 'NORMAL'; this.hero.hitFlashTimer = 0; this.hero.attackCooldown = 20; this.hero.hasDealtDamage = false; this.hero.boonColor = '#fbbf24'; this.hero.element = 'NORMAL'; 
-        this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.enemies = []; this.obstacles = []; this.doors = []; this.roomCleared = false;
-
-        this.currentLevel = 1; this.currentScene = 'HOME'; this.hero.x = 400; this.hero.y = 400; this.homePortal.active = false; this.dialogue.active = false;
+        this.hero.currentRevives = this.hero.maxRevives; 
         
-        // 只有确切地被太乙真人打败过，剧情才会推进到现实东海
+        this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.enemies = []; this.obstacles = []; this.doors = []; this.roomCleared = false;
+        
+        // 【修改】回城时复活在十字路口中心
+        this.currentLevel = 1; this.currentScene = 'HOME'; this.hero.x = 800; this.hero.y = 600; this.homePortal.active = false; this.dialogue.active = false;
+        
         if (this.storyPhase === 0 && this.taiyiDefeatCount > 0) {
             this.storyPhase = 1; 
         }
@@ -111,7 +133,6 @@ export class GameEngine {
             else this.startDialogue(GameConfig.DIALOGUES.BOSS_AOBING_ENCOUNTER);
             return;
         }
-
         this.currentLevel++; 
         const room = RoomGenerator.generateBattleRoom(this.mapWidth, this.mapHeight, this.hero.x, this.hero.y, this.storyPhase);
         this.obstacles = room.obstacles; this.enemies = room.enemies;
@@ -128,7 +149,6 @@ export class GameEngine {
         this.frame++;
         for (let i = this.lightnings.length - 1; i >= 0; i--) { this.lightnings[i].duration--; if (this.lightnings[i].duration <= 0) this.lightnings.splice(i, 1); }
 
-        // 【修改 1】复活按键改为 F
         if (this.hero.state === 'DEAD') { if (Input.keys.f) this.resurrect(); return; }
 
         if (this.hero.state === 'UPGRADING') {
@@ -170,25 +190,26 @@ export class GameEngine {
             const distLi = Math.sqrt(Math.pow(this.hero.x - this.npcLiJing.x, 2) + Math.pow(this.hero.y - this.npcLiJing.y, 2));
             const distTaiyi = Math.sqrt(Math.pow(this.hero.x - this.npcTaiyi.x, 2) + Math.pow(this.hero.y - this.npcTaiyi.y, 2));
             const distRack = Math.sqrt(Math.pow(this.hero.x - this.weaponRack.x, 2) + Math.pow(this.hero.y - this.weaponRack.y, 2));
+            const distHomePool = Math.sqrt(Math.pow(this.hero.x - this.homeLotusPool.x, 2) + Math.pow(this.hero.y - this.homeLotusPool.y, 2));
 
-            if (distLi < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
+            if (distHomePool < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
+                if (this.hero.maxRevives < 3) {
+                    const cost = GameConfig.REVIVE_COSTS[this.hero.maxRevives];
+                    if (this.hero.spiritStones >= cost) {
+                        this.hero.spiritStones -= cost;
+                        this.hero.maxRevives++;
+                        this.hero.currentRevives++;
+                        this.dialogue.cooldown = 20;
+                    }
+                }
+            } else if (distLi < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
                 this.startDialogue(GameConfig.DIALOGUES.LI_JING);
             } else if (distTaiyi < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
-                
-                // 【修改 2】如果玩家还没被打败过，强制拦截，不予对话
                 if (this.taiyiDefeatCount === 0) return;
-
-                // 依次解锁长枪、风火轮，之后才是修练升级
                 if (!this.unlockedWeapons.includes('SPEAR')) {
-                    this.startDialogue(GameConfig.DIALOGUES.TAIYI_UNLOCK_SPEAR); 
-                    this.unlockedWeapons.push('SPEAR'); 
-                    this.hero.weapon = 'SPEAR'; 
-                    this.hero.attack += 20; 
+                    this.startDialogue(GameConfig.DIALOGUES.TAIYI_UNLOCK_SPEAR); this.unlockedWeapons.push('SPEAR'); this.hero.weapon = 'SPEAR'; this.hero.attack += 20; 
                 } else if (!this.unlockedWeapons.includes('WHEELS')) {
-                    this.startDialogue(GameConfig.DIALOGUES.TAIYI_UNLOCK_WHEELS); 
-                    this.unlockedWeapons.push('WHEELS'); 
-                    this.hero.weapon = 'WHEELS'; 
-                    this.hero.dashSpeed += 10; 
+                    this.startDialogue(GameConfig.DIALOGUES.TAIYI_UNLOCK_WHEELS); this.unlockedWeapons.push('WHEELS'); this.hero.weapon = 'WHEELS'; this.hero.dashSpeed += 10; 
                 } else {
                     this.hero.state = 'UPGRADING'; this.dialogue.cooldown = 15;
                 }
@@ -219,9 +240,9 @@ export class GameEngine {
             let p = this.enemyProjectiles[i]; p.x += p.dirX * p.speed; p.y += p.dirY * p.speed;
             if (p.x < 0 || p.x > this.mapWidth || p.y < 0 || p.y > this.mapHeight) { this.enemyProjectiles.splice(i, 1); continue; }
             const distToHero = Math.sqrt(Math.pow(p.x - this.hero.x, 2) + Math.pow(p.y - this.hero.y, 2));
-            if (distToHero < p.radius + this.hero.radius && this.hero.state !== 'DASHING' && this.hero.state !== 'DEAD') {
+            if (distToHero < p.radius + this.hero.radius && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING' && this.hero.state !== 'DEAD') {
                 const dmg = Math.max(1, p.damage - this.hero.defense); this.hero.hp -= dmg; this.hero.hitFlashTimer = 10; this.triggerHitStop(50); this.triggerScreenShake(150, 4);
-                if (this.hero.hp <= 0) { this.hero.hp = 0; this.hero.state = 'DEAD'; }
+                this.handleHeroDeath(); 
                 this.enemyProjectiles.splice(i, 1);
             }
         }
@@ -270,6 +291,15 @@ export class GameEngine {
     }
 
     private updateHero() {
+        if (this.hero.state === 'REVIVING') {
+            this.hero.reviveTimer--;
+            if (this.hero.reviveTimer <= 0) {
+                this.hero.state = 'NORMAL';
+                this.hero.hitFlashTimer = 60; 
+            }
+            return; 
+        }
+
         if (this.hero.state === 'NORMAL') {
             let dx = 0; let dy = 0;
             if (Input.keys.w) dy -= 1; if (Input.keys.s) dy += 1; if (Input.keys.a) dx -= 1; if (Input.keys.d) dx += 1;
@@ -319,7 +349,6 @@ export class GameEngine {
         if (this.hero.state !== 'DASHING' && this.hero.weapon !== 'WHEELS') {
             this.checkObstacleCollision(this.hero);
             if (this.currentScene === 'HOME') {
-                // 【修改 3】只有当太乙真人出现后，才需要计算他与哪吒的碰撞
                 if (this.taiyiDefeatCount > 0) { 
                     const distTaiyi = Math.sqrt(Math.pow(this.hero.x - this.npcTaiyi.x, 2) + Math.pow(this.hero.y - this.npcTaiyi.y, 2));
                     if (distTaiyi < this.hero.radius + this.npcTaiyi.radius && distTaiyi > 0) { const overlap = (this.hero.radius + this.npcTaiyi.radius) - distTaiyi; this.hero.x += ((this.hero.x - this.npcTaiyi.x) / distTaiyi) * overlap; this.hero.y += ((this.hero.y - this.npcTaiyi.y) / distTaiyi) * overlap; }
@@ -372,15 +401,16 @@ export class GameEngine {
                 if (enemy.isBoss && enemy.name === '太乙真人') {
                     if (enemy.attackTimer === 30) {
                         if (enemy.attackRound === 1) { 
-                            if (dist < 300 && this.hero.state !== 'DASHING') { 
+                            if (dist < 300 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING') { 
                                 this.hero.hp -= 20; this.hero.hitFlashTimer = 10; this.triggerScreenShake(200, 6); 
-                                // 【增加保护逻辑】哪怕只吃太乙的一发普通光圈就被打死，同样判定过关
-                                if (this.hero.hp <= 0) {
-                                    this.taiyiDefeatCount++; this.hero.hp = 0; this.hero.state = 'DEAD';
-                                }
+                                this.handleHeroDeath(); 
                             } 
                         } 
-                        else if (enemy.attackRound === 2) { this.taiyiDefeatCount++; this.hero.hp = 0; this.hero.state = 'DEAD'; }
+                        else if ((enemy.attackRound || 0) >= 2) { 
+                            this.hero.hp -= 9999; 
+                            this.handleHeroDeath();
+                            if (this.hero.state === 'DEAD') { this.taiyiDefeatCount++; }
+                        }
                     }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 80; }
                 } 
@@ -397,9 +427,9 @@ export class GameEngine {
                     if (enemy.attackTimer === 10) { this.enemyProjectiles.push({ x: enemy.x, y: enemy.y, dirX: enemy.dirX, dirY: enemy.dirY, speed: 8, damage: 15, radius: 10, ownerId: enemy.id, bounces: 0 }); }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 90; }
                 } else {
-                    if (enemy.attackTimer === 10 && this.hero.state !== 'DASHING' && dist < 80) {
+                    if (enemy.attackTimer === 10 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING' && dist < 80) {
                         const dmg = Math.max(1, 10 - this.hero.defense); this.hero.hp -= dmg; this.hero.hitFlashTimer = 10; this.triggerHitStop(40); this.triggerScreenShake(100, 4);
-                        if (this.hero.hp <= 0) { this.hero.hp = 0; this.hero.state = 'DEAD'; }
+                        this.handleHeroDeath(); 
                     }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 60; }
                 }
@@ -432,9 +462,9 @@ export class GameEngine {
 
         if (this.currentScene === 'HOME') {
             renderList.push({ type: 'NPC_LI', y: this.npcLiJing.y, obj: this.npcLiJing });
-            // 【修改 4】只有击败计数大于 0，太乙真人才加入渲染列表
             if (this.taiyiDefeatCount > 0) renderList.push({ type: 'NPC_TAIYI', y: this.npcTaiyi.y, obj: this.npcTaiyi });
             renderList.push({ type: 'RACK', y: this.weaponRack.y, obj: this.weaponRack });
+            renderList.push({ type: 'HOME_POOL', y: this.homeLotusPool.y, obj: this.homeLotusPool });
             EnvironmentRenderer.drawHomePortal(this.rc, this.ctx, this.homePortal, this.frame); 
         } else if (this.currentScene === 'OASIS') { renderList.push({ type: 'POOL', y: this.lotusPool.y, obj: this.lotusPool }); }
 
@@ -448,6 +478,18 @@ export class GameEngine {
             else if (item.type === 'NPC_TAIYI') EntityRenderer.drawTaiyi(this.rc, this.ctx, this.hero, item.obj, this.dialogue.active);
             else if (item.type === 'RACK') EnvironmentRenderer.drawWeaponRack(this.rc, this.ctx, item.obj, this.hero, this.unlockedWeapons);
             else if (item.type === 'POOL') EnvironmentRenderer.drawOasis(this.rc, this.ctx, this.hero, item.obj);
+            else if (item.type === 'HOME_POOL') EnvironmentRenderer.drawHomeLotusPool(this.rc, this.ctx, item.obj, this.hero, GameConfig.REVIVE_COSTS);
+        }
+
+        if (this.hero.state === 'REVIVING') {
+            this.ctx.save();
+            this.ctx.translate(this.hero.x, this.hero.y);
+            const progress = 1 - (this.hero.reviveTimer / 90);
+            this.ctx.rotate(progress * Math.PI * 4); 
+            this.rc.circle(0, 0, progress * 150, { stroke: '#f472b6', strokeWidth: 4, roughness: 2 });
+            this.rc.ellipse(0, 0, progress * 120, progress * 40, { fill: 'rgba(236, 72, 153, 0.6)', fillStyle: 'solid', stroke: 'none' });
+            this.rc.ellipse(0, 0, progress * 40, progress * 120, { fill: 'rgba(236, 72, 153, 0.6)', fillStyle: 'solid', stroke: 'none' });
+            this.ctx.restore();
         }
 
         if (this.currentScene !== 'HOME') {
