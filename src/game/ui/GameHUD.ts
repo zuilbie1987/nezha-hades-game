@@ -4,7 +4,7 @@ export class GameHUD {
         const screenH = window.innerHeight;
 
         ctx.fillStyle = 'rgba(243, 244, 246, 0.85)';
-        ctx.fillRect(0, 0, screenW, 70); // 顶部栏加宽以容纳莲花
+        ctx.fillRect(0, 0, screenW, 70); 
         ctx.beginPath();
         ctx.moveTo(0, 70);
         ctx.lineTo(screenW, 70);
@@ -25,26 +25,21 @@ export class GameHUD {
         const cx = screenW / 2;
         const hpWidth = 300;
 
-        // ====== 【新增】绘制复活莲花图标 ======
         for (let i = 0; i < 3; i++) {
             const lx = cx - 40 + i * 40;
             const ly = 20; 
             if (i < hero.maxRevives) {
                 if (i < hero.currentRevives) {
-                    // 已解锁且可用：粉色饱满莲花
                     rc.ellipse(lx, ly, 24, 16, { fill: '#fbcfe8', fillStyle: 'solid', stroke: '#db2777', strokeWidth: 2, roughness: 1.5 });
                     rc.ellipse(lx, ly - 4, 12, 14, { fill: '#f472b6', fillStyle: 'solid', stroke: '#be185d', strokeWidth: 1.5, roughness: 1 });
                 } else {
-                    // 已解锁但已消耗：灰色空心轮廓
                     rc.ellipse(lx, ly, 24, 16, { stroke: '#6b7280', strokeWidth: 2, roughness: 2 });
                 }
             } else {
-                // 未解锁：淡淡的虚线阴影
                 rc.ellipse(lx, ly, 16, 10, { stroke: '#d1d5db', strokeWidth: 1, roughness: 1 });
             }
         }
 
-        // 血条统一下移至 Y = 40
         const hpY = 40;
         rc.rectangle(cx - hpWidth/2, hpY, hpWidth, 20, { fill: '#d1d5db', fillStyle: 'solid', roughness: 1, stroke: 'none' });
         rc.rectangle(cx - hpWidth/2, hpY, (hero.hp / hero.maxHp) * hpWidth, 20, { fill: '#ef4444', fillStyle: 'solid', roughness: 1, stroke: 'none' });
@@ -61,7 +56,11 @@ export class GameHUD {
         ctx.textAlign = 'right';
         ctx.fillStyle = '#10b981';
         ctx.font = 'bold 20px "Comic Sans MS", cursive, sans-serif';
-        ctx.fillText(`💎 灵石: ${hero.spiritStones}`, screenW - 20, 42);
+        ctx.fillText(`💎 灵石: ${hero.spiritStones}`, screenW - 20, 32);
+        
+        // ====== 【新增】局内金币显示 ======
+        ctx.fillStyle = '#eab308';
+        ctx.fillText(`🪙 金币: ${hero.gold}`, screenW - 20, 58);
 
         if (hero.state === 'DEAD') {
             const cy = screenH / 2;

@@ -1,6 +1,6 @@
 import rough from 'roughjs';
 import { Input } from '../engine/Input';
-import type { Enemy, DialogueLine, Boon, Obstacle, Door, WeaponType, Projectile, EnemyProjectile, ElementType } from './entities/Types';
+import type { Enemy, DialogueLine, Boon, Obstacle, Door, WeaponType, Projectile, EnemyProjectile, ElementType, RewardType } from './entities/Types';
 import { DialogueUI } from './ui/DialogueUI';
 import { GameHUD } from './ui/GameHUD';
 import { BoonSystem } from './systems/BoonSystem';
@@ -27,8 +27,10 @@ export class GameEngine {
     private currentScene: 'HOME' | 'BATTLE' | 'OASIS' = 'HOME';
 
     private hero = { 
-        x: 800, y: 600, speed: 5, radius: 25, // 【修改】初始出生点为地图中心
+        x: 800, y: 600, speed: 5, radius: 25,
         hp: 100, maxHp: 100, attack: 15, defense: 0, spiritStones: 0,
+        // 【新增】局内金币系统，死亡后清零
+        gold: 0,
         state: 'NORMAL', dirX: 1, dirY: 0,
         dashTimer: 0, dashDuration: 8, dashSpeed: 15, dashCooldown: 0,
         attackTimer: 0, attackDuration: 15, attackCooldown: 0, attackThrustSpeed: 3,
@@ -42,12 +44,11 @@ export class GameEngine {
     private enemyProjectiles: EnemyProjectile[] = []; 
     private lightnings: { x1: number, y1: number, x2: number, y2: number, duration: number }[] = [];
 
-    // ====== 【修改】将所有陈塘关实体按区域重新安放 ======
-    private npcLiJing = { x: 800, y: 220, radius: 40 };       // 正北方：总兵府
-    private weaponRack = { x: 350, y: 550, radius: 40 };      // 西南方：演武场
-    private npcTaiyi = { x: 1250, y: 480, radius: 50 };       // 东南方：修心苑上部
-    private homeLotusPool = { x: 1250, y: 720, radius: 50 };  // 东南方：修心苑下部
-    private homePortal = { x: 800, y: 950, radius: 40, active: false }; // 正南方：传送门
+    private npcLiJing = { x: 800, y: 220, radius: 40 };       
+    private weaponRack = { x: 350, y: 550, radius: 40 };      
+    private npcTaiyi = { x: 1250, y: 480, radius: 50 };       
+    private homeLotusPool = { x: 1250, y: 720, radius: 50 };  
+    private homePortal = { x: 800, y: 950, radius: 40, active: false }; 
     
     private lotusPool = { x: 800, y: 600, radius: 80, used: false };
     private dialogue = { active: false, index: 0, lines: [] as DialogueLine[], cooldown: 0 };
@@ -55,7 +56,9 @@ export class GameEngine {
     private mapWidth = 1600; private mapHeight = 1200;
     private enemies: Enemy[] = []; private obstacles: Obstacle[] = []; private doors: Door[] = [];         
     
-    private currentBoons: Boon[] = []; private roomCleared: boolean = false; private expectedReward: 'BOON' | 'HEAL' = 'BOON'; 
+    private currentBoons: Boon[] = []; private roomCleared: boolean = false; 
+    // 【修改】将类型约束为 RewardType
+    private expectedReward: RewardType = 'BOON'; 
 
     constructor(canvasId: string) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement; this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D; this.rc = rough.canvas(this.canvas);
@@ -108,9 +111,11 @@ export class GameEngine {
         this.hero.hp = this.hero.maxHp; this.hero.state = 'NORMAL'; this.hero.hitFlashTimer = 0; this.hero.attackCooldown = 20; this.hero.hasDealtDamage = false; this.hero.boonColor = '#fbbf24'; this.hero.element = 'NORMAL'; 
         this.hero.currentRevives = this.hero.maxRevives; 
         
+        // 【新增】每次死亡回到陈塘关，局内的金币清零
+        this.hero.gold = 0;
+        
         this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.enemies = []; this.obstacles = []; this.doors = []; this.roomCleared = false;
         
-        // 【修改】回城时复活在十字路口中心
         this.currentLevel = 1; this.currentScene = 'HOME'; this.hero.x = 800; this.hero.y = 600; this.homePortal.active = false; this.dialogue.active = false;
         
         if (this.storyPhase === 0 && this.taiyiDefeatCount > 0) {
@@ -122,7 +127,7 @@ export class GameEngine {
         this.dialogue.active = true; this.dialogue.index = 0; this.dialogue.lines = lines; this.dialogue.cooldown = 15; this.hero.state = 'NORMAL'; 
     }
 
-    private transitionToBattle(rewardType: 'BOON' | 'HEAL') {
+    private transitionToBattle(rewardType: RewardType) {
         this.currentScene = 'BATTLE'; this.roomCleared = false; this.expectedReward = rewardType; this.doors = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = [];
         this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150;
         
@@ -196,10 +201,7 @@ export class GameEngine {
                 if (this.hero.maxRevives < 3) {
                     const cost = GameConfig.REVIVE_COSTS[this.hero.maxRevives];
                     if (this.hero.spiritStones >= cost) {
-                        this.hero.spiritStones -= cost;
-                        this.hero.maxRevives++;
-                        this.hero.currentRevives++;
-                        this.dialogue.cooldown = 20;
+                        this.hero.spiritStones -= cost; this.hero.maxRevives++; this.hero.currentRevives++; this.dialogue.cooldown = 20;
                     }
                 }
             } else if (distLi < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
@@ -221,7 +223,7 @@ export class GameEngine {
 
             if (this.homePortal.active) {
                 const distPortal = Math.sqrt(Math.pow(this.hero.x - this.homePortal.x, 2) + Math.pow(this.hero.y - this.homePortal.y, 2));
-                if (distPortal < 50) this.transitionToBattle('BOON');
+                if (distPortal < 50) this.transitionToBattle('BOON'); // 第一扇门默认为赐福
             }
             
         } else if (this.currentScene === 'BATTLE') {
@@ -279,7 +281,12 @@ export class GameEngine {
     private checkDoors() {
         for (const door of this.doors) {
             const dist = Math.sqrt(Math.pow(this.hero.x - door.x, 2) + Math.pow(this.hero.y - door.y, 2));
-            if (dist < 50) { if (door.rewardType === 'HEAL') this.transitionToOasis(); else this.transitionToBattle(door.rewardType); break; }
+            if (dist < 50) { 
+                // 【修改】只有疗伤类型的绿洲池才会跳转到和平房间，其余 4 种全部带入战斗房
+                if (door.rewardType === 'HEAL') this.transitionToOasis(); 
+                else this.transitionToBattle(door.rewardType); 
+                break; 
+            }
         }
     }
 
@@ -293,11 +300,7 @@ export class GameEngine {
     private updateHero() {
         if (this.hero.state === 'REVIVING') {
             this.hero.reviveTimer--;
-            if (this.hero.reviveTimer <= 0) {
-                this.hero.state = 'NORMAL';
-                this.hero.hitFlashTimer = 60; 
-            }
-            return; 
+            if (this.hero.reviveTimer <= 0) { this.hero.state = 'NORMAL'; this.hero.hitFlashTimer = 60; } return; 
         }
 
         if (this.hero.state === 'NORMAL') {
@@ -443,8 +446,24 @@ export class GameEngine {
         
         if (this.enemies.length === 0 && !this.roomCleared && this.currentScene === 'BATTLE') {
             this.roomCleared = true;
-            if (this.expectedReward === 'BOON') { this.hero.state = 'BOON_SELECTION'; this.currentBoons = BoonSystem.generateBoons(3); } 
-            else if (this.expectedReward === 'HEAL') { this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + 30); this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); }
+
+            // ====== 【核心修改】在此处根据门上的预告结算各种掉落物 ======
+            if (this.expectedReward === 'BOON') { 
+                this.hero.state = 'BOON_SELECTION'; this.currentBoons = BoonSystem.generateBoons(3); 
+            } 
+            else if (this.expectedReward === 'GOLD') {
+                this.hero.gold += 150; // 获得 150 金币
+                this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); 
+            }
+            else if (this.expectedReward === 'MAX_HP') {
+                this.hero.maxHp += 25; 
+                this.hero.hp += 25; // 获得 25 点最大生命值上限
+                this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); 
+            }
+            else if (this.expectedReward === 'HAMMER') {
+                this.hero.attack += 10; // 【暂时预留】简单粗暴加 10 攻击力
+                this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); 
+            }
         }
     }
 

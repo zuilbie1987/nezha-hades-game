@@ -6,33 +6,33 @@ export class EnvironmentRenderer {
         let strokeColor = '#9ca3af';
         
         if (scene === 'HOME') { 
-            // ================= 陈塘关总兵府 豪华装修版 =================
-            // 0. 基础底色
-            rc.rectangle(0, 0, width, height, { fill: '#f3f4f6', fillStyle: 'hachure', hachureAngle: 30, hachureGap: 15, roughness: 2, strokeWidth: 3, stroke: '#d1d5db' });
+            // ================= 陈塘关总兵府 (背景全静止) =================
+            // 加入 seed 固定线条，彻底消除背景抖动带来的凌乱感
+            rc.rectangle(0, 0, width, height, { fill: '#f3f4f6', fillStyle: 'hachure', hachureAngle: 30, hachureGap: 15, roughness: 2, strokeWidth: 3, stroke: '#d1d5db', seed: 100 });
 
             // 1. 外围城墙与城垛
-            rc.rectangle(20, 20, width - 40, height - 40, { stroke: '#4b5563', strokeWidth: 6, roughness: 2.5 });
-            rc.rectangle(40, 40, width - 80, height - 80, { stroke: '#9ca3af', strokeWidth: 2, roughness: 1.5 });
+            rc.rectangle(20, 20, width - 40, height - 40, { stroke: '#4b5563', strokeWidth: 6, roughness: 2.5, seed: 101 });
+            rc.rectangle(40, 40, width - 80, height - 80, { stroke: '#9ca3af', strokeWidth: 2, roughness: 1.5, seed: 102 });
             for (let i = 60; i < width - 60; i += 100) {
-                rc.rectangle(i, 20, 60, 20, { fill: '#6b7280', fillStyle: 'solid', stroke: '#374151', roughness: 1 });
+                rc.rectangle(i, 20, 60, 20, { fill: '#6b7280', fillStyle: 'solid', stroke: '#374151', roughness: 1, seed: i });
             }
 
             // 2. 十字青石板主干道
-            rc.line(width / 2, 350, width / 2, height - 80, { stroke: '#d1d5db', strokeWidth: 50, roughness: 2 });
-            rc.line(80, 600, width - 80, 600, { stroke: '#d1d5db', strokeWidth: 50, roughness: 2 });
-            rc.circle(width / 2, 600, 100, { stroke: '#9ca3af', strokeWidth: 4, roughness: 2 });
+            rc.line(width / 2, 350, width / 2, height - 80, { stroke: '#d1d5db', strokeWidth: 50, roughness: 2, seed: 103 });
+            rc.line(80, 600, width - 80, 600, { stroke: '#d1d5db', strokeWidth: 50, roughness: 2, seed: 104 });
+            rc.circle(width / 2, 600, 100, { stroke: '#9ca3af', strokeWidth: 4, roughness: 2, seed: 105 });
 
-            // 3. 正北：中军总兵府 (李靖区)
-            rc.rectangle(width / 2 - 250, 80, 500, 270, { fill: '#e5e7eb', fillStyle: 'solid', stroke: '#9ca3af', strokeWidth: 4, roughness: 2 });
-            rc.rectangle(width / 2 - 200, 120, 400, 190, { fill: '#cbd5e1', fillStyle: 'cross-hatch', stroke: '#6b7280' });
+            // 3. 正北：中军总兵府
+            rc.rectangle(width / 2 - 250, 80, 500, 270, { fill: '#e5e7eb', fillStyle: 'solid', stroke: '#9ca3af', strokeWidth: 4, roughness: 2, seed: 106 });
+            rc.rectangle(width / 2 - 200, 120, 400, 190, { fill: '#cbd5e1', fillStyle: 'cross-hatch', stroke: '#6b7280', seed: 107 });
 
-            // 4. 西南：演武场 (武器架区)
-            rc.rectangle(80, 400, width / 2 - 130, 450, { fill: '#fef2f2', fillStyle: 'zigzag', hachureGap: 10, stroke: '#fca5a5', strokeWidth: 3, roughness: 2 });
+            // 4. 西南：演武场
+            rc.rectangle(80, 400, width / 2 - 130, 450, { fill: '#fef2f2', fillStyle: 'zigzag', hachureGap: 10, stroke: '#fca5a5', strokeWidth: 3, roughness: 2, seed: 108 });
             
-            // 5. 东南：修心苑 (太乙真人与莲池区)
-            rc.rectangle(width / 2 + 50, 400, width / 2 - 130, 450, { fill: '#f0fdf4', fillStyle: 'dots', stroke: '#86efac', strokeWidth: 3, roughness: 2 });
+            // 5. 东南：修心苑
+            rc.rectangle(width / 2 + 50, 400, width / 2 - 130, 450, { fill: '#f0fdf4', fillStyle: 'dots', stroke: '#86efac', strokeWidth: 3, roughness: 2, seed: 109 });
             
-            return; // 陈塘关绘制完毕，直接返回
+            return; 
         }
         else if (scene === 'OASIS') { bgColor = '#ecfccb'; }
         else if (scene === 'BATTLE') {
@@ -40,28 +40,32 @@ export class EnvironmentRenderer {
             strokeColor = storyPhase === 0 ? '#9ca3af' : '#5eead4';
         }
 
-        // 战斗房间和绿洲的基础背景
+        // 战斗房间和绿洲的地图底板也让其静止
         rc.rectangle(0, 0, width, height, {
-            fill: bgColor, fillStyle: 'hachure', hachureAngle: 30, hachureGap: 15, roughness: 2, strokeWidth: 3, stroke: strokeColor
+            fill: bgColor, fillStyle: 'hachure', hachureAngle: 30, hachureGap: 15, roughness: 2, strokeWidth: 3, stroke: strokeColor, seed: 1
         });
     }
 
     static drawObstacle(rc: any, obs: Obstacle) {
+        // 【核心】用障碍物的坐标生成固定的种子，这样不同位置的石头线条不一样，但自身绝对不会抖动！
+        const obsSeed = Math.floor(obs.x + obs.y); 
+
         if (obs.type === 'ROCK') {
-            rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#9ca3af', fillStyle: 'hachure', hachureAngle: 60, hachureGap: 4, roughness: 2.5, stroke: '#4b5563', strokeWidth: 2 });
-            rc.polygon([[obs.x - obs.radius * 0.8, obs.y + obs.radius/2], [obs.x, obs.y - obs.radius], [obs.x + obs.radius * 0.8, obs.y + obs.radius/2]], { stroke: '#374151', strokeWidth: 2, roughness: 2 });
+            rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#9ca3af', fillStyle: 'hachure', hachureAngle: 60, hachureGap: 4, roughness: 2.5, stroke: '#4b5563', strokeWidth: 2, seed: obsSeed });
+            rc.polygon([[obs.x - obs.radius * 0.8, obs.y + obs.radius/2], [obs.x, obs.y - obs.radius], [obs.x + obs.radius * 0.8, obs.y + obs.radius/2]], { stroke: '#374151', strokeWidth: 2, roughness: 2, seed: obsSeed + 1 });
         } else if (obs.type === 'BAMBOO') {
-            rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#dcfce7', fillStyle: 'solid', stroke: 'none', roughness: 2 });
+            rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#dcfce7', fillStyle: 'solid', stroke: 'none', roughness: 2, seed: obsSeed });
             for (let i=0; i<4; i++) {
-                const bx = obs.x - obs.radius * 0.6 + (obs.radius * 0.4) * i + (Math.random() * 10 - 5);
-                rc.line(bx, obs.y + obs.radius * 0.8, bx, obs.y - obs.radius * 1.2, { stroke: '#22c55e', strokeWidth: 4, roughness: 1.5 });
+                // 每次基于坐标生成固定的竹节偏移量，而不是用 Math.random()，防止帧级抖动
+                const bx = obs.x - obs.radius * 0.6 + (obs.radius * 0.4) * i + (((obsSeed + i) % 10) - 5);
+                rc.line(bx, obs.y + obs.radius * 0.8, bx, obs.y - obs.radius * 1.2, { stroke: '#22c55e', strokeWidth: 4, roughness: 1.5, seed: obsSeed + 2 + i });
             }
         } else if (obs.type === 'CORAL') {
-            rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#fce7f3', fillStyle: 'solid', stroke: 'none', roughness: 2 });
-            rc.curve([[obs.x, obs.y], [obs.x - 20, obs.y - obs.radius], [obs.x - 10, obs.y - obs.radius - 20]], { stroke: '#f43f5e', strokeWidth: 8, roughness: 2 });
-            rc.curve([[obs.x, obs.y], [obs.x + 20, obs.y - obs.radius + 10], [obs.x + 30, obs.y - obs.radius - 10]], { stroke: '#f43f5e', strokeWidth: 6, roughness: 2 });
+            rc.circle(obs.x, obs.y, obs.radius * 2, { fill: '#fce7f3', fillStyle: 'solid', stroke: 'none', roughness: 2, seed: obsSeed });
+            rc.curve([[obs.x, obs.y], [obs.x - 20, obs.y - obs.radius], [obs.x - 10, obs.y - obs.radius - 20]], { stroke: '#f43f5e', strokeWidth: 8, roughness: 2, seed: obsSeed + 1 });
+            rc.curve([[obs.x, obs.y], [obs.x + 20, obs.y - obs.radius + 10], [obs.x + 30, obs.y - obs.radius - 10]], { stroke: '#f43f5e', strokeWidth: 6, roughness: 2, seed: obsSeed + 2 });
         } else if (obs.type === 'POND') {
-            rc.ellipse(obs.x, obs.y, obs.radius * 2.5, obs.radius * 1.5, { fill: '#bae6fd', fillStyle: 'hachure', hachureAngle: 0, hachureGap: 6, roughness: 1.5, stroke: '#38bdf8', strokeWidth: 2 });
+            rc.ellipse(obs.x, obs.y, obs.radius * 2.5, obs.radius * 1.5, { fill: '#bae6fd', fillStyle: 'hachure', hachureAngle: 0, hachureGap: 6, roughness: 1.5, stroke: '#38bdf8', strokeWidth: 2, seed: obsSeed });
         }
     }
 
@@ -69,14 +73,33 @@ export class EnvironmentRenderer {
         for (const door of doors) {
             ctx.save();
             ctx.translate(door.x, door.y);
+            
+            // 门有神秘的互动感，保留微微旋转，且不加 seed，让它保持魔法般的抖动
             ctx.rotate(frame * 0.05);
-            const doorColor = door.rewardType === 'BOON' ? '#fbbf24' : '#10b981';
+
+            let doorColor = '#fff';
+            let iconText = '';
+            let label = '';
+
+            switch (door.rewardType) {
+                case 'BOON': doorColor = '#fbbf24'; iconText = '☯'; label = '神明赐福'; break;
+                case 'HEAL': doorColor = '#10b981'; iconText = '❤'; label = '莲池仙境'; break;
+                case 'GOLD': doorColor = '#eab308'; iconText = '🪙'; label = '龙宫秘宝'; break;
+                case 'MAX_HP': doorColor = '#ef4444'; iconText = '🍖'; label = '蟠桃灵根'; break;
+                case 'HAMMER': doorColor = '#6b7280'; iconText = '🔨'; label = '神兵重铸'; break;
+            }
+
             rc.ellipse(0, 0, door.radius*2, door.radius*2, { stroke: doorColor, strokeWidth: 4, roughness: 3, bowing: 2 });
             rc.ellipse(0, 0, door.radius*1.5, door.radius*1.5, { stroke: doorColor, strokeWidth: 2, roughness: 2 });
             ctx.restore();
-            ctx.fillStyle = door.rewardType === 'BOON' ? '#fbbf24' : '#10b981';
+            
+            ctx.fillStyle = doorColor;
             ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
-            ctx.fillText(door.rewardType === 'BOON' ? '神明赐福' : '灵丹妙药', door.x - 35, door.y - 60);
+            ctx.textAlign = 'center';
+            ctx.fillText(label, door.x, door.y - 60);
+            ctx.font = '24px Arial';
+            ctx.fillText(iconText, door.x, door.y + 8);
+            ctx.textAlign = 'left';
         }
     }
 
@@ -85,6 +108,7 @@ export class EnvironmentRenderer {
         ctx.save();
         ctx.translate(portal.x, portal.y);
         ctx.rotate(frame * 0.05);
+        // 传送门是互动物，保持抖动
         rc.ellipse(0, 0, 80, 80, { stroke: '#8b5cf6', strokeWidth: 4, roughness: 3, bowing: 2 });
         rc.ellipse(0, 0, 60, 60, { stroke: '#c4b5fd', strokeWidth: 2, roughness: 2 });
         ctx.restore();
@@ -94,6 +118,7 @@ export class EnvironmentRenderer {
     }
 
     static drawOasis(rc: any, ctx: CanvasRenderingContext2D, hero: any, pool: any) {
+        // 绿洲仙池也属于互动元素，保持魔法般的水波抖动
         rc.ellipse(pool.x, pool.y, pool.radius * 2.5, pool.radius * 1.5, { fill: '#bae6fd', fillStyle: 'solid', stroke: '#38bdf8', strokeWidth: 2, roughness: 1.5 });
         rc.circle(pool.x, pool.y, 40, { fill: '#fbcfe8', fillStyle: 'solid', stroke: '#f472b6', strokeWidth: 2 });
         
@@ -106,14 +131,16 @@ export class EnvironmentRenderer {
     }
 
     static drawWeaponRack(rc: any, ctx: CanvasRenderingContext2D, rack: any, hero: any, unlockedWeapons: string[]) {
-        rc.rectangle(rack.x - 40, rack.y - 10, 80, 20, { fill: '#78350f', fillStyle: 'hachure', roughness: 2, stroke: '#451a03' });
-        rc.line(rack.x - 30, rack.y, rack.x - 30, rack.y - 50, { stroke: '#451a03', strokeWidth: 5, roughness: 1.5 });
-        rc.line(rack.x + 30, rack.y, rack.x + 30, rack.y - 50, { stroke: '#451a03', strokeWidth: 5, roughness: 1.5 });
-        rc.line(rack.x - 40, rack.y - 40, rack.x + 40, rack.y - 40, { stroke: '#451a03', strokeWidth: 3, roughness: 1 });
+        // 武器架属于背景家具，加入 seed 彻底固定
+        const rackSeed = 200;
+        rc.rectangle(rack.x - 40, rack.y - 10, 80, 20, { fill: '#78350f', fillStyle: 'hachure', roughness: 2, stroke: '#451a03', seed: rackSeed });
+        rc.line(rack.x - 30, rack.y, rack.x - 30, rack.y - 50, { stroke: '#451a03', strokeWidth: 5, roughness: 1.5, seed: rackSeed + 1 });
+        rc.line(rack.x + 30, rack.y, rack.x + 30, rack.y - 50, { stroke: '#451a03', strokeWidth: 5, roughness: 1.5, seed: rackSeed + 2 });
+        rc.line(rack.x - 40, rack.y - 40, rack.x + 40, rack.y - 40, { stroke: '#451a03', strokeWidth: 3, roughness: 1, seed: rackSeed + 3 });
 
         const weaponNames: Record<string, string> = { 'RING': '乾坤圈', 'SASH': '混天绫', 'SPEAR': '火尖枪', 'WHEELS': '风火轮' };
-        rc.line(rack.x - 20, rack.y - 40, rack.x - 20, rack.y - 80, { stroke: '#fbbf24', strokeWidth: 2, roughness: 2 });
-        rc.line(rack.x + 20, rack.y - 40, rack.x + 20, rack.y - 70, { stroke: '#ef4444', strokeWidth: 2, roughness: 2 });
+        rc.line(rack.x - 20, rack.y - 40, rack.x - 20, rack.y - 80, { stroke: '#fbbf24', strokeWidth: 2, roughness: 2, seed: rackSeed + 4 });
+        rc.line(rack.x + 20, rack.y - 40, rack.x + 20, rack.y - 70, { stroke: '#ef4444', strokeWidth: 2, roughness: 2, seed: rackSeed + 5 });
 
         const dist = Math.sqrt(Math.pow(hero.x - rack.x, 2) + Math.pow(hero.y - rack.y, 2));
         if (dist < 100) {
@@ -126,8 +153,10 @@ export class EnvironmentRenderer {
     }
 
     static drawHomeLotusPool(rc: any, ctx: CanvasRenderingContext2D, pool: any, hero: any, costs: number[]) {
-        rc.ellipse(pool.x, pool.y, pool.radius * 2, pool.radius * 1.5, { fill: '#fbcfe8', fillStyle: 'hachure', hachureAngle: 45, hachureGap: 5, stroke: '#f472b6', strokeWidth: 3, roughness: 2 });
-        rc.circle(pool.x, pool.y - 10, 30, { fill: '#f472b6', fillStyle: 'solid', stroke: '#db2777', strokeWidth: 2 });
+        // 七宝莲池是魔法建筑，允许中心莲座轻微抖动，但底座不变
+        const poolSeed = 300;
+        rc.ellipse(pool.x, pool.y, pool.radius * 2, pool.radius * 1.5, { fill: '#fbcfe8', fillStyle: 'hachure', hachureAngle: 45, hachureGap: 5, stroke: '#f472b6', strokeWidth: 3, roughness: 2, seed: poolSeed });
+        rc.circle(pool.x, pool.y - 10, 30, { fill: '#f472b6', fillStyle: 'solid', stroke: '#db2777', strokeWidth: 2 }); // 无 seed，保持抖动活力
 
         const dist = Math.sqrt(Math.pow(hero.x - pool.x, 2) + Math.pow(hero.y - pool.y, 2));
         if (dist < pool.radius + 50 && hero.state !== 'UPGRADING') {

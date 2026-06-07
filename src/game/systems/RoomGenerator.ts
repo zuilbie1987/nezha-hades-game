@@ -1,10 +1,8 @@
-import type { Enemy, Obstacle, Door } from '../entities/Types';
+import type { Enemy, Obstacle, Door, RewardType } from '../entities/Types';
 
 export class RoomGenerator {
-    // 【修改】加入 storyPhase 参数控制主题
     static generateBattleRoom(mapWidth: number, mapHeight: number, heroX: number, heroY: number, storyPhase: number): { enemies: Enemy[], obstacles: Obstacle[] } {
         const obstacles: Obstacle[] = [];
-        // Phase 0: 脑海幻境（竹林） | Phase 1: 现实东海（珊瑚）
         const types: ('ROCK' | 'BAMBOO' | 'POND' | 'CORAL')[] = storyPhase === 0 ? ['ROCK', 'BAMBOO', 'POND'] : ['ROCK', 'CORAL', 'POND'];
         const numObstacles = Math.floor(Math.random() * 4) + 6; 
         
@@ -26,11 +24,9 @@ export class RoomGenerator {
             enemies.push({ id: 2, x: mapWidth / 2 + 200, y: 300, hp: 40, maxHp: 40, radius: 28, hitFlashTimer: 0, speed: 2.8, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0, enemyType: 'MELEE', name: '虾兵' });
             enemies.push({ id: 3, x: mapWidth / 2, y: 150, hp: 50, maxHp: 50, radius: 25, hitFlashTimer: 0, speed: 1.8, state: 'CHASING', attackTimer: 0, attackCooldown: 0, dirX: 0, dirY: 0, enemyType: 'RANGED', name: '蚌精' });
         }
-
         return { enemies, obstacles };
     }
 
-    // 【修改】生成指定的 Boss
     static generateBossRoom(mapWidth: number, storyPhase: number): { enemies: Enemy[], obstacles: Obstacle[] } {
         if (storyPhase === 0) {
             return {
@@ -39,7 +35,6 @@ export class RoomGenerator {
             };
         } else {
             return {
-                // 敖丙血量设定为可击杀的真实 Boss
                 enemies: [{ id: 998, x: mapWidth / 2, y: 300, hp: 1200, maxHp: 1200, radius: 45, hitFlashTimer: 0, speed: 2.2, state: 'CHASING', attackTimer: 0, attackCooldown: 80, dirX: 0, dirY: 0, enemyType: 'BOSS', isBoss: true, name: '敖丙', attackRound: 0 }],
                 obstacles: []
             };
@@ -48,7 +43,12 @@ export class RoomGenerator {
 
     static spawnRewardDoors(mapWidth: number, mapHeight: number, obstacles: Obstacle[]): Door[] {
         const doors: Door[] = [];
-        const rewardTypes: ('BOON' | 'HEAL')[] = ['BOON', 'HEAL'];
+        
+        // 【新增】洗牌算法从 5 种奖励中随机挑出 2 种完全不同的门
+        const allRewards: RewardType[] = ['BOON', 'HEAL', 'GOLD', 'MAX_HP', 'HAMMER'];
+        const shuffled = allRewards.sort(() => 0.5 - Math.random());
+        const selectedRewards = [shuffled[0], shuffled[1]];
+
         for (let i = 0; i < 2; i++) {
             let px = mapWidth / 2 + (i === 0 ? -200 : 200);
             let py = 150;
@@ -62,7 +62,7 @@ export class RoomGenerator {
                 attempts++;
             }
             px = Math.max(100, Math.min(px, mapWidth - 100)); py = Math.max(100, Math.min(py, mapHeight - 100));
-            doors.push({ x: px, y: py, radius: 40, rewardType: rewardTypes[i] });
+            doors.push({ x: px, y: py, radius: 40, rewardType: selectedRewards[i] });
         }
         return doors;
     }
