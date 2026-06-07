@@ -2,9 +2,7 @@ import type { Obstacle, Door } from '../entities/Types';
 
 export class EnvironmentRenderer {
     static drawMap(rc: any, scene: string, width: number, height: number, storyPhase: number) {
-        let bgColor = '#e5e7eb'; 
-        let strokeColor = '#9ca3af';
-        
+        let bgColor = '#e5e7eb'; let strokeColor = '#9ca3af';
         if (scene === 'HOME') { 
             rc.rectangle(0, 0, width, height, { fill: '#f3f4f6', fillStyle: 'hachure', hachureAngle: 30, hachureGap: 15, roughness: 2, strokeWidth: 3, stroke: '#d1d5db', seed: 100 });
             rc.rectangle(20, 20, width - 40, height - 40, { stroke: '#4b5563', strokeWidth: 6, roughness: 2.5, seed: 101 });
@@ -19,13 +17,13 @@ export class EnvironmentRenderer {
             rc.rectangle(width / 2 + 50, 400, width / 2 - 130, 450, { fill: '#f0fdf4', fillStyle: 'dots', stroke: '#86efac', strokeWidth: 3, roughness: 2, seed: 109 });
             return; 
         }
-        // 【修改】NPC 房间使用静谧的背景色
         else if (scene === 'OASIS' || scene === 'NPC_ROOM') { bgColor = '#ecfccb'; }
         else if (scene === 'BATTLE') {
-            bgColor = storyPhase === 0 ? '#e5e7eb' : '#ccfbf1'; 
-            strokeColor = storyPhase === 0 ? '#9ca3af' : '#5eead4';
+            // 【修改】阶段 2 陈塘关平叛，背景色变为肃杀的暗灰色
+            if (storyPhase === 0) { bgColor = '#e5e7eb'; strokeColor = '#9ca3af'; }
+            else if (storyPhase === 1) { bgColor = '#ccfbf1'; strokeColor = '#5eead4'; }
+            else { bgColor = '#cbd5e1'; strokeColor = '#64748b'; }
         }
-
         rc.rectangle(0, 0, width, height, { fill: bgColor, fillStyle: 'hachure', hachureAngle: 30, hachureGap: 15, roughness: 2, strokeWidth: 3, stroke: strokeColor, seed: 1 });
     }
 
@@ -59,6 +57,8 @@ export class EnvironmentRenderer {
                 case 'GOLD': doorColor = '#eab308'; iconText = '🪙'; label = '龙宫秘宝'; break;
                 case 'MAX_HP': doorColor = '#ef4444'; iconText = '🍖'; label = '蟠桃灵根'; break;
                 case 'HAMMER': doorColor = '#6b7280'; iconText = '🔨'; label = '神兵重铸'; break;
+                // ====== 【新增】首领大门视觉 ======
+                case 'BOSS': doorColor = '#b91c1c'; iconText = '☠'; label = '首领挑战'; break;
             }
             rc.ellipse(0, 0, door.radius*2, door.radius*2, { stroke: doorColor, strokeWidth: 4, roughness: 3, bowing: 2 });
             rc.ellipse(0, 0, door.radius*1.5, door.radius*1.5, { stroke: doorColor, strokeWidth: 2, roughness: 2 });

@@ -24,18 +24,18 @@ export class GameEngine {
     private taiyiDefeatCount: number = 0; 
     private unlockedWeapons: WeaponType[] = ['RING', 'SASH']; 
 
-    // 【修改】加入 NPC_ROOM 场景
     private currentScene: 'HOME' | 'BATTLE' | 'OASIS' | 'NPC_ROOM' = 'HOME';
 
     private hero = { 
         x: 800, y: 600, speed: 5, radius: 25,
-        hp: 100, maxHp: 100, attack: 15, defense: 0, spiritStones: 0,
-        gold: 0, state: 'NORMAL', dirX: 1, dirY: 0,
+        hp: 100, maxHp: 100, attack: 15, defense: 0, spiritStones: 0, gold: 0, 
+        state: 'NORMAL', dirX: 1, dirY: 0,
         dashTimer: 0, dashDuration: 8, dashSpeed: 15, dashCooldown: 0,
         attackTimer: 0, attackDuration: 15, attackCooldown: 0, attackThrustSpeed: 3,
         hasDealtDamage: false, hitFlashTimer: 0,
         boonColor: '#fbbf24', weapon: 'RING' as WeaponType, ringBounces: 3, 
-        element: 'NORMAL' as ElementType, maxRevives: 0, currentRevives: 0, reviveTimer: 0
+        element: 'NORMAL' as ElementType, maxRevives: 0, currentRevives: 0, reviveTimer: 0,
+        weaponUpgrades: { 'RING': false, 'SASH': false, 'SPEAR': false, 'WHEELS': false } as Record<WeaponType, boolean>
     };
 
     private projectiles: Projectile[] = []; 
@@ -50,9 +50,11 @@ export class GameEngine {
     
     private lotusPool = { x: 800, y: 600, radius: 80, used: false };
     
-    // ====== 【新增】NPC 奖励房专用实体 ======
-    private currentNpcType: 'AOGUANG' | 'PIG' | null = null;
+    private currentNpcType: 'AOGUANG' | 'PIG' | 'BEASTS' | null = null;
     private rewardNpcEntity = { x: 800, y: 400, radius: 60, interacted: false };
+
+    // ====== 【修补】加入主线阶段过渡信使 ======
+    private postDialogueAction: 'AOBING_DEAD' | 'LIJING_DEAD' | null = null;
 
     private dialogue = { active: false, index: 0, lines: [] as DialogueLine[], cooldown: 0 };
     private mapWidth = 1600; private mapHeight = 1200;
@@ -101,6 +103,7 @@ export class GameEngine {
     private resurrect() {
         this.hero.hp = this.hero.maxHp; this.hero.state = 'NORMAL'; this.hero.hitFlashTimer = 0; this.hero.attackCooldown = 20; this.hero.hasDealtDamage = false; this.hero.boonColor = '#fbbf24'; this.hero.element = 'NORMAL'; 
         this.hero.currentRevives = this.hero.maxRevives; this.hero.gold = 0;
+        this.hero.weaponUpgrades = { 'RING': false, 'SASH': false, 'SPEAR': false, 'WHEELS': false };
         this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.enemies = []; this.obstacles = []; this.doors = []; this.roomCleared = false;
         this.currentLevel = 1; this.currentScene = 'HOME'; this.hero.x = 800; this.hero.y = 600; this.homePortal.active = false; this.dialogue.active = false;
         if (this.storyPhase === 0 && this.taiyiDefeatCount > 0) { this.storyPhase = 1; }
@@ -110,37 +113,41 @@ export class GameEngine {
         this.dialogue.active = true; this.dialogue.index = 0; this.dialogue.lines = lines; this.dialogue.cooldown = 15; this.hero.state = 'NORMAL'; 
     }
 
-    // ====== 【新增】过渡到和平 NPC 房间 ======
-    private transitionToNPC(npcType: 'AOGUANG' | 'PIG') {
-        this.currentScene = 'NPC_ROOM';
-        this.currentNpcType = npcType;
-        this.rewardNpcEntity.interacted = false;
-        this.hero.x = this.mapWidth / 2;
-        this.hero.y = this.mapHeight - 150;
-        this.rewardNpcEntity.x = this.mapWidth / 2;
-        this.rewardNpcEntity.y = this.mapHeight / 2 - 100;
-        this.doors = []; this.obstacles = []; this.enemies = [];
-        this.projectiles = []; this.enemyProjectiles = []; this.lightnings = [];
-        this.currentLevel++;
+    private transitionToNPC(npcType: 'AOGUANG' | 'PIG' | 'BEASTS') {
+        this.currentScene = 'NPC_ROOM'; this.currentNpcType = npcType; this.rewardNpcEntity.interacted = false;
+        this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150;
+        this.rewardNpcEntity.x = this.mapWidth / 2; this.rewardNpcEntity.y = this.mapHeight / 2 - 100;
+        this.doors = []; this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.currentLevel++;
     }
 
     private transitionToBattle(rewardType: RewardType) {
         this.currentScene = 'BATTLE'; this.roomCleared = false; this.expectedReward = rewardType; this.doors = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = [];
         this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150;
-        if (this.currentLevel === 5) {
+        
+        // ====== 【核心修复】无论进什么门，先增加当前层数 ======
+        this.currentLevel++; 
+
+        // ====== 【核心修复】直接认准 Boss 门标记，强行召唤首领 ======
+        if (rewardType === 'BOSS') {
             const room = RoomGenerator.generateBossRoom(this.mapWidth, this.storyPhase); this.obstacles = room.obstacles; this.enemies = room.enemies;
-            if (this.storyPhase === 0) this.startDialogue(GameConfig.DIALOGUES.BOSS_TAIYI_ENCOUNTER); else this.startDialogue(GameConfig.DIALOGUES.BOSS_AOBING_ENCOUNTER);
+            
+            // 剧情识别播放
+            if (this.storyPhase === 0) this.startDialogue(GameConfig.DIALOGUES.BOSS_TAIYI_ENCOUNTER); 
+            else if (this.storyPhase === 1) this.startDialogue(GameConfig.DIALOGUES.BOSS_AOBING_ENCOUNTER); 
+            else this.startDialogue(GameConfig.DIALOGUES.BOSS_LIJING_ENCOUNTER);
             return;
         }
-        this.currentLevel++; const room = RoomGenerator.generateBattleRoom(this.mapWidth, this.mapHeight, this.hero.x, this.hero.y, this.storyPhase); this.obstacles = room.obstacles; this.enemies = room.enemies;
+        
+        // 如果不是 Boss 门，则正常生成小怪房间
+        const room = RoomGenerator.generateBattleRoom(this.mapWidth, this.mapHeight, this.hero.x, this.hero.y, this.storyPhase); this.obstacles = room.obstacles; this.enemies = room.enemies;
     }
 
     private transitionToOasis() {
         this.currentScene = 'OASIS'; this.roomCleared = true; this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150; this.lotusPool.x = this.mapWidth / 2; this.lotusPool.y = this.mapHeight / 2 - 100; this.lotusPool.used = false;
-        this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); this.currentLevel++;
+        this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles, this.currentLevel); this.currentLevel++;
     }
 
-    private applyBoon(boon: Boon) { boon.apply(this.hero); this.hero.state = 'NORMAL'; this.currentBoons = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); }
+    private applyBoon(boon: Boon) { boon.apply(this.hero); this.hero.state = 'NORMAL'; this.currentBoons = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles, this.currentLevel); }
 
     private update() {
         this.frame++;
@@ -173,12 +180,26 @@ export class GameEngine {
                 this.dialogue.index++; this.dialogue.cooldown = 15;
                 if (this.dialogue.index >= this.dialogue.lines.length) {
                     this.dialogue.active = false;
+                    
+                    // ====== 【修补】对话完毕后执行剧情推移与回城 ======
+                    if (this.postDialogueAction === 'AOBING_DEAD') {
+                        this.storyPhase = 2; 
+                        this.postDialogueAction = null;
+                        this.resurrect(); 
+                        return;
+                    } else if (this.postDialogueAction === 'LIJING_DEAD') {
+                        this.storyPhase = 2; // 游戏通关核心循环，依然留在高难度的第 2 阶段
+                        this.postDialogueAction = null;
+                        this.resurrect(); 
+                        return;
+                    }
+
                     if (this.currentScene === 'HOME') this.homePortal.active = true;
-                    // ====== 【新增】对话结束，发放奖励并刷出下一层门 ======
                     else if (this.currentScene === 'NPC_ROOM' && this.doors.length === 0) {
                         if (this.currentNpcType === 'AOGUANG') this.hero.gold += 150;
                         else if (this.currentNpcType === 'PIG') { this.hero.maxHp += 25; this.hero.hp += 25; }
-                        this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, []);
+                        else if (this.currentNpcType === 'BEASTS') { this.hero.weaponUpgrades[this.hero.weapon] = true; }
+                        this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, [], this.currentLevel);
                     }
                 }
             }
@@ -206,13 +227,13 @@ export class GameEngine {
                 if (distPortal < 50) this.transitionToBattle('BOON'); 
             }
         } 
-        // ====== 【新增】NPC 房间交互判定 ======
         else if (this.currentScene === 'NPC_ROOM') {
             const distNpc = Math.sqrt(Math.pow(this.hero.x - this.rewardNpcEntity.x, 2) + Math.pow(this.hero.y - this.rewardNpcEntity.y, 2));
             if (distNpc < this.rewardNpcEntity.radius + 80 && Input.keys.f && !this.rewardNpcEntity.interacted && this.dialogue.cooldown <= 0) {
                 this.rewardNpcEntity.interacted = true;
                 if (this.currentNpcType === 'AOGUANG') this.startDialogue(GameConfig.DIALOGUES.NPC_AOGUANG);
                 else if (this.currentNpcType === 'PIG') this.startDialogue(GameConfig.DIALOGUES.NPC_PIG);
+                else if (this.currentNpcType === 'BEASTS') this.startDialogue(GameConfig.DIALOGUES.NPC_BEASTS);
             }
             this.checkDoors();
         }
@@ -270,10 +291,10 @@ export class GameEngine {
         for (const door of this.doors) {
             const dist = Math.sqrt(Math.pow(this.hero.x - door.x, 2) + Math.pow(this.hero.y - door.y, 2));
             if (dist < 50) { 
-                // ====== 【修改】根据不同路线分发跳转逻辑 ======
                 if (door.rewardType === 'HEAL') this.transitionToOasis(); 
                 else if (door.rewardType === 'GOLD') this.transitionToNPC('AOGUANG');
                 else if (door.rewardType === 'MAX_HP') this.transitionToNPC('PIG');
+                else if (door.rewardType === 'HAMMER') this.transitionToNPC('BEASTS');
                 else this.transitionToBattle(door.rewardType); 
                 break; 
             }
@@ -300,36 +321,60 @@ export class GameEngine {
 
             if (Input.keys.j && this.hero.attackCooldown <= 0 && this.currentScene === 'BATTLE') {
                 this.hero.state = 'ATTACKING'; this.hero.hasDealtDamage = false; 
-                if (this.hero.weapon === 'SPEAR') { this.hero.attackTimer = 15; this.hero.attackCooldown = 20; } else if (this.hero.weapon === 'RING') { this.hero.attackTimer = 10; this.hero.attackCooldown = 30; this.projectiles.push({ x: this.hero.x, y: this.hero.y, dirX: this.hero.dirX, dirY: this.hero.dirY, speed: 15, damage: this.hero.attack, bouncesLeft: this.hero.ringBounces, hitEnemies: [], state: 'FLYING', color: this.hero.boonColor }); } else if (this.hero.weapon === 'SASH') { this.hero.attackTimer = 25; this.hero.attackCooldown = 25; } else if (this.hero.weapon === 'WHEELS') { this.hero.attackTimer = 20; this.hero.attackCooldown = 20; }
+                
+                if (this.hero.weapon === 'SPEAR') { 
+                    this.hero.attackTimer = 15; this.hero.attackCooldown = 20; 
+                } 
+                else if (this.hero.weapon === 'RING') { 
+                    this.hero.attackTimer = 10; this.hero.attackCooldown = 30; 
+                    const upg = this.hero.weaponUpgrades['RING'];
+                    this.projectiles.push({ 
+                        x: this.hero.x, y: this.hero.y, dirX: this.hero.dirX, dirY: this.hero.dirY, 
+                        speed: upg ? 25 : 15, damage: this.hero.attack * (upg ? 1.2 : 1), bouncesLeft: this.hero.ringBounces + (upg ? 4 : 0),
+                        hitEnemies: [], state: 'FLYING', color: this.hero.boonColor 
+                    }); 
+                } 
+                else if (this.hero.weapon === 'SASH') { 
+                    this.hero.attackTimer = 25; this.hero.attackCooldown = 25; 
+                } 
+                else if (this.hero.weapon === 'WHEELS') { 
+                    this.hero.attackTimer = 20; this.hero.attackCooldown = 20; 
+                }
             } else if (Input.keys.space && this.hero.dashCooldown <= 0) { this.hero.state = 'DASHING'; this.hero.dashTimer = this.hero.dashDuration; this.hero.dashCooldown = 40; }
         } else if (this.hero.state === 'DASHING') {
             this.hero.x += this.hero.dirX * this.hero.dashSpeed; this.hero.y += this.hero.dirY * this.hero.dashSpeed; this.hero.dashTimer--; if (this.hero.dashTimer <= 0) this.hero.state = 'NORMAL';
         } else if (this.hero.state === 'ATTACKING') {
             if (this.hero.weapon === 'SPEAR') {
-                this.hero.x += this.hero.dirX * this.hero.attackThrustSpeed; this.hero.y += this.hero.dirY * this.hero.attackThrustSpeed;
+                const upg = this.hero.weaponUpgrades['SPEAR'];
+                const thrustAmt = upg ? 6 : this.hero.attackThrustSpeed;
+                this.hero.x += this.hero.dirX * thrustAmt; this.hero.y += this.hero.dirY * thrustAmt;
                 if (!this.hero.hasDealtDamage && this.hero.attackTimer > this.hero.attackDuration - 5) {
                     const hitboxX = this.hero.x + this.hero.dirX * 80; const hitboxY = this.hero.y + this.hero.dirY * 80; let hitAny = false;
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; const dist = Math.sqrt(Math.pow(enemy.x - hitboxX, 2) + Math.pow(enemy.y - hitboxY, 2));
-                        if (dist < 50 + enemy.radius) { enemy.hp -= this.hero.attack; enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 20; enemy.y += this.hero.dirY * 20; this.applyElementalStatus(enemy, this.hero.attack); hitAny = true; }
+                        if (dist < (upg ? 80 : 50) + enemy.radius) { enemy.hp -= this.hero.attack * (upg ? 1.5 : 1); enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 20; enemy.y += this.hero.dirY * 20; this.applyElementalStatus(enemy, this.hero.attack); hitAny = true; }
                     }
                     if (hitAny) { this.triggerHitStop(60); this.triggerScreenShake(100, 6); } this.hero.hasDealtDamage = true; 
                 }
             } else if (this.hero.weapon === 'SASH') {
                 if (this.hero.attackTimer === 15) { 
-                    let hitAny = false;
+                    const upg = this.hero.weaponUpgrades['SASH']; let hitAny = false;
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; const dx = enemy.x - this.hero.x; const dy = enemy.y - this.hero.y; const dist = Math.sqrt(dx*dx + dy*dy);
-                        if (dist < 150 + enemy.radius) { enemy.hp -= this.hero.attack * 0.8; enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 40; enemy.y += this.hero.dirY * 40; this.applyElementalStatus(enemy, this.hero.attack * 0.8); hitAny = true; }
+                        if (dist < (upg ? 250 : 150) + enemy.radius) { enemy.hp -= this.hero.attack * (upg ? 1.5 : 0.8); enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 40; enemy.y += this.hero.dirY * 40; this.applyElementalStatus(enemy, this.hero.attack * (upg ? 1.5 : 0.8)); hitAny = true; }
                     }
                     if (hitAny) { this.triggerHitStop(80); this.triggerScreenShake(200, 5); }
                 }
             } else if (this.hero.weapon === 'WHEELS') {
-                this.hero.x += this.hero.dirX * 12; this.hero.y += this.hero.dirY * 12; if (this.frame % 5 === 0) this.hero.hasDealtDamage = false; 
+                const upg = this.hero.weaponUpgrades['WHEELS'];
+                const wheelSpeed = upg ? 18 : 12; 
+                this.hero.x += this.hero.dirX * wheelSpeed; this.hero.y += this.hero.dirY * wheelSpeed; 
+                
+                if (this.frame % (upg ? 2 : 5) === 0) this.hero.hasDealtDamage = false; 
                 if (!this.hero.hasDealtDamage) {
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; const dist = Math.sqrt(Math.pow(enemy.x - this.hero.x, 2) + Math.pow(enemy.y - this.hero.y, 2));
-                        if (dist < 60 + enemy.radius) { enemy.hp -= this.hero.attack * 0.4; enemy.hitFlashTimer = 5; this.applyElementalStatus(enemy, this.hero.attack * 0.4); this.triggerScreenShake(50, 2); }
+                        if (dist < 60 + enemy.radius) { enemy.hp -= this.hero.attack * (upg ? 0.6 : 0.4); enemy.hitFlashTimer = 5; this.applyElementalStatus(enemy, this.hero.attack * 0.4); this.triggerScreenShake(50, 2); }
                     }
                     this.hero.hasDealtDamage = true;
                 }
@@ -359,6 +404,19 @@ export class GameEngine {
             let speedMultiplier = 1; if (enemy.frostTimer && enemy.frostTimer > 0) { enemy.frostTimer--; speedMultiplier = 0.5; }
 
             if (enemy.hp <= 0 && enemy.hitFlashTimer <= 0) {
+                // ====== 【修补】触发主线剧情：击杀首领拦截 ======
+                if (enemy.isBoss && enemy.name === '敖丙') {
+                    this.enemies.splice(i, 1);
+                    this.postDialogueAction = 'AOBING_DEAD';
+                    this.startDialogue(GameConfig.DIALOGUES.AOBING_DEFEATED);
+                    continue;
+                } else if (enemy.isBoss && enemy.name === '李靖') {
+                    this.enemies.splice(i, 1);
+                    this.postDialogueAction = 'LIJING_DEAD';
+                    this.startDialogue(GameConfig.DIALOGUES.LIJING_DEFEATED);
+                    continue;
+                }
+
                 if (!enemy.isBoss) { this.hero.spiritStones += Math.floor(Math.random() * (GameConfig.STONE_DROP_MAX - GameConfig.STONE_DROP_MIN + 1)) + GameConfig.STONE_DROP_MIN; }
                 this.enemies.splice(i, 1); continue;
             }
@@ -391,13 +449,32 @@ export class GameEngine {
                         if (enemy.attackRound === 1) { 
                             if (dist < 300 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING') { this.hero.hp -= 20; this.hero.hitFlashTimer = 10; this.triggerScreenShake(200, 6); this.handleHeroDeath(); } 
                         } 
-                        else if ((enemy.attackRound || 0) >= 2) { this.hero.hp -= 9999; this.handleHeroDeath(); if (this.hero.state === 'DEAD') { this.taiyiDefeatCount++; } }
+                        else if ((enemy.attackRound || 0) >= 2) { 
+                            this.hero.hp -= 9999; this.handleHeroDeath(); 
+                            if (this.hero.state === 'DEAD') { this.taiyiDefeatCount++; } 
+                        }
                     }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 80; }
                 } 
                 else if (enemy.isBoss && enemy.name === '敖丙') {
                     if (enemy.attackTimer === 30) { for(let k = 0; k < 8; k++) { const angle = (Math.PI / 4) * k; this.enemyProjectiles.push({ x: enemy.x, y: enemy.y, dirX: Math.cos(angle), dirY: Math.sin(angle), speed: 7, damage: 25, radius: 12, ownerId: enemy.id, bounces: 0 }); } }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 70; }
+                }
+                // ====== 【修补】加入李靖的终极镇压攻击 ======
+                else if (enemy.isBoss && enemy.name === '李靖') {
+                    if (enemy.attackTimer === 30) {
+                        if (enemy.attackRound === 1) { 
+                            // 天罡剑气：近战极大范围伤害
+                            if (dist < 200 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING') { 
+                                this.hero.hp -= 25; this.hero.hitFlashTimer = 10; this.triggerScreenShake(100, 4); this.handleHeroDeath(); 
+                            } 
+                        } 
+                        else if ((enemy.attackRound || 0) >= 2) { 
+                            // 玲珑宝塔：全图精准制导，超大范围，毁天灭地
+                            this.enemyProjectiles.push({ x: this.hero.x, y: this.hero.y - 150, dirX: 0, dirY: 1, speed: 6, damage: 45, radius: 60, ownerId: enemy.id, bounces: 0 });
+                        }
+                    }
+                    if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 60; }
                 }
                 else if (enemy.enemyType === 'RANGED') {
                     if (enemy.attackTimer === 10) { this.enemyProjectiles.push({ x: enemy.x, y: enemy.y, dirX: enemy.dirX, dirY: enemy.dirY, speed: 8, damage: 15, radius: 10, ownerId: enemy.id, bounces: 0 }); }
@@ -419,7 +496,8 @@ export class GameEngine {
         if (this.enemies.length === 0 && !this.roomCleared && this.currentScene === 'BATTLE') {
             this.roomCleared = true;
             if (this.expectedReward === 'BOON') { this.hero.state = 'BOON_SELECTION'; this.currentBoons = BoonSystem.generateBoons(3); } 
-            else if (this.expectedReward === 'HAMMER') { this.hero.attack += 10; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); }
+            else if (this.expectedReward === 'HAMMER') { this.hero.attack += 10; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles, this.currentLevel); }
+            else { this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles, this.currentLevel); }
         }
     }
 
@@ -444,7 +522,6 @@ export class GameEngine {
         } else if (this.currentScene === 'OASIS') { 
             renderList.push({ type: 'POOL', y: this.lotusPool.y, obj: this.lotusPool }); 
         } else if (this.currentScene === 'NPC_ROOM') {
-            // ====== 【新增】渲染和平房间 NPC ======
             renderList.push({ type: 'REWARD_NPC', y: this.rewardNpcEntity.y, obj: this.rewardNpcEntity });
         }
 
@@ -459,10 +536,10 @@ export class GameEngine {
             else if (item.type === 'RACK') EnvironmentRenderer.drawWeaponRack(this.rc, this.ctx, item.obj, this.hero, this.unlockedWeapons);
             else if (item.type === 'POOL') EnvironmentRenderer.drawOasis(this.rc, this.ctx, this.hero, item.obj);
             else if (item.type === 'HOME_POOL') EnvironmentRenderer.drawHomeLotusPool(this.rc, this.ctx, item.obj, this.hero, GameConfig.REVIVE_COSTS);
-            // ====== 【新增】调用新 NPC 渲染方法 ======
             else if (item.type === 'REWARD_NPC') {
                 if (this.currentNpcType === 'AOGUANG') EntityRenderer.drawAoGuang(this.rc, this.ctx, this.hero, item.obj, item.obj.interacted, this.dialogue.active, this.frame);
                 else if (this.currentNpcType === 'PIG') EntityRenderer.drawFlyingPig(this.rc, this.ctx, this.hero, item.obj, item.obj.interacted, this.dialogue.active, this.frame);
+                else if (this.currentNpcType === 'BEASTS') EntityRenderer.drawBarrierBeasts(this.rc, this.ctx, this.hero, item.obj, item.obj.interacted, this.dialogue.active, this.frame);
             }
         }
 
