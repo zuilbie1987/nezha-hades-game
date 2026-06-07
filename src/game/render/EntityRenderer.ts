@@ -145,4 +145,70 @@ export class EntityRenderer {
         }
         ctx.textAlign = 'left';
     }
+
+    // ====== 【新增】龙王敖广虚影 ======
+    static drawAoGuang(rc: any, ctx: CanvasRenderingContext2D, hero: any, npc: any, interacted: boolean, dialogueActive: boolean, frame: number) {
+        ctx.save();
+        ctx.translate(npc.x, npc.y);
+        // 呼吸般的全息投影效果
+        ctx.globalAlpha = 0.7 + Math.sin(frame * 0.05) * 0.2;
+        // 巨大龙首轮廓
+        rc.ellipse(0, -30, 140, 180, { fill: '#bae6fd', fillStyle: 'hachure', hachureGap: 8, stroke: '#0284c7', strokeWidth: 4, roughness: 3 });
+        // 龙角
+        rc.curve([[-40, -100], [-70, -150], [-30, -180]], { stroke: '#0ea5e9', strokeWidth: 5, roughness: 2 });
+        rc.curve([[40, -100], [70, -150], [30, -180]], { stroke: '#0ea5e9', strokeWidth: 5, roughness: 2 });
+        // 龙须飘动
+        const whiskerMove = Math.sin(frame * 0.1) * 10;
+        rc.curve([[-40, 20], [-100, 60 + whiskerMove], [-140, 10 - whiskerMove]], { stroke: '#38bdf8', strokeWidth: 4, roughness: 2 });
+        rc.curve([[40, 20], [100, 60 - whiskerMove], [140, 10 + whiskerMove]], { stroke: '#38bdf8', strokeWidth: 4, roughness: 2 });
+        ctx.restore();
+
+        if (!interacted && !dialogueActive) {
+            const dist = Math.sqrt(Math.pow(hero.x - npc.x, 2) + Math.pow(hero.y - npc.y, 2));
+            if (dist < 150) {
+                ctx.fillStyle = '#1f2937';
+                ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
+                ctx.fillText('[按 F 勒索龙宫秘宝]', npc.x - 70, npc.y - 140);
+            }
+        }
+    }
+
+    // ====== 【新增】太乙的坐骑神猪 ======
+    static drawFlyingPig(rc: any, ctx: CanvasRenderingContext2D, hero: any, npc: any, interacted: boolean, dialogueActive: boolean, frame: number) {
+        // 如果交互完且对话结束，飞猪就溜走了，不再绘制
+        if (interacted && !dialogueActive) return; 
+
+        ctx.save();
+        // 呼噜呼噜的呼吸起伏
+        const breathe = Math.sin(frame * 0.05) * 5;
+        ctx.translate(npc.x, npc.y + breathe);
+        
+        // 小翅膀
+        rc.ellipse(-50, -20, 40, 20, { fill: '#fff', fillStyle: 'solid', stroke: '#9ca3af', strokeWidth: 2, roughness: 2 });
+        rc.ellipse(50, -20, 40, 20, { fill: '#fff', fillStyle: 'solid', stroke: '#9ca3af', strokeWidth: 2, roughness: 2 });
+        // 肥硕的身体
+        rc.circle(0, 0, 120, { fill: '#fbcfe8', fillStyle: 'solid', stroke: '#db2777', strokeWidth: 3, roughness: 2 });
+        // 猪鼻子
+        rc.ellipse(0, 15, 40, 30, { fill: '#f472b6', fillStyle: 'solid', stroke: '#be185d', strokeWidth: 2 });
+        rc.circle(-10, 15, 6, { fill: '#831843', fillStyle: 'solid' });
+        rc.circle(10, 15, 6, { fill: '#831843', fillStyle: 'solid' });
+
+        if (!interacted) {
+            ctx.fillStyle = '#888';
+            ctx.font = 'bold 24px "Comic Sans MS"';
+            // Zzz 动画
+            const zCount = Math.floor(frame / 30) % 4;
+            ctx.fillText('Z'.repeat(zCount), 40, -60);
+        }
+        ctx.restore();
+
+        if (!interacted && !dialogueActive) {
+            const dist = Math.sqrt(Math.pow(hero.x - npc.x, 2) + Math.pow(hero.y - npc.y, 2));
+            if (dist < 150) {
+                ctx.fillStyle = '#1f2937';
+                ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
+                ctx.fillText('[按 F 抢夺蟠桃仙气]', npc.x - 70, npc.y - 80);
+            }
+        }
+    }
 }

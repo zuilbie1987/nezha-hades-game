@@ -24,20 +24,18 @@ export class GameEngine {
     private taiyiDefeatCount: number = 0; 
     private unlockedWeapons: WeaponType[] = ['RING', 'SASH']; 
 
-    private currentScene: 'HOME' | 'BATTLE' | 'OASIS' = 'HOME';
+    // 【修改】加入 NPC_ROOM 场景
+    private currentScene: 'HOME' | 'BATTLE' | 'OASIS' | 'NPC_ROOM' = 'HOME';
 
     private hero = { 
         x: 800, y: 600, speed: 5, radius: 25,
         hp: 100, maxHp: 100, attack: 15, defense: 0, spiritStones: 0,
-        // 【新增】局内金币系统，死亡后清零
-        gold: 0,
-        state: 'NORMAL', dirX: 1, dirY: 0,
+        gold: 0, state: 'NORMAL', dirX: 1, dirY: 0,
         dashTimer: 0, dashDuration: 8, dashSpeed: 15, dashCooldown: 0,
         attackTimer: 0, attackDuration: 15, attackCooldown: 0, attackThrustSpeed: 3,
         hasDealtDamage: false, hitFlashTimer: 0,
         boonColor: '#fbbf24', weapon: 'RING' as WeaponType, ringBounces: 3, 
-        element: 'NORMAL' as ElementType,
-        maxRevives: 0, currentRevives: 0, reviveTimer: 0
+        element: 'NORMAL' as ElementType, maxRevives: 0, currentRevives: 0, reviveTimer: 0
     };
 
     private projectiles: Projectile[] = []; 
@@ -51,14 +49,15 @@ export class GameEngine {
     private homePortal = { x: 800, y: 950, radius: 40, active: false }; 
     
     private lotusPool = { x: 800, y: 600, radius: 80, used: false };
-    private dialogue = { active: false, index: 0, lines: [] as DialogueLine[], cooldown: 0 };
     
+    // ====== 【新增】NPC 奖励房专用实体 ======
+    private currentNpcType: 'AOGUANG' | 'PIG' | null = null;
+    private rewardNpcEntity = { x: 800, y: 400, radius: 60, interacted: false };
+
+    private dialogue = { active: false, index: 0, lines: [] as DialogueLine[], cooldown: 0 };
     private mapWidth = 1600; private mapHeight = 1200;
     private enemies: Enemy[] = []; private obstacles: Obstacle[] = []; private doors: Door[] = [];         
-    
-    private currentBoons: Boon[] = []; private roomCleared: boolean = false; 
-    // 【修改】将类型约束为 RewardType
-    private expectedReward: RewardType = 'BOON'; 
+    private currentBoons: Boon[] = []; private roomCleared: boolean = false; private expectedReward: RewardType = 'BOON'; 
 
     constructor(canvasId: string) {
         this.canvas = document.getElementById(canvasId) as HTMLCanvasElement; this.ctx = this.canvas.getContext('2d') as CanvasRenderingContext2D; this.rc = rough.canvas(this.canvas);
@@ -93,59 +92,52 @@ export class GameEngine {
     private handleHeroDeath() {
         if (this.hero.hp <= 0 && this.hero.state !== 'DEAD') {
             if (this.hero.currentRevives > 0) {
-                this.hero.currentRevives--;
-                this.hero.hp = this.hero.maxHp; 
-                this.hero.state = 'REVIVING';   
-                this.hero.reviveTimer = 90;     
-                this.hero.hitFlashTimer = 0;
-                this.triggerHitStop(30);
-                this.triggerScreenShake(300, 8);
-            } else {
-                this.hero.hp = 0;
-                this.hero.state = 'DEAD';
-            }
+                this.hero.currentRevives--; this.hero.hp = this.hero.maxHp; this.hero.state = 'REVIVING'; this.hero.reviveTimer = 90; this.hero.hitFlashTimer = 0;
+                this.triggerHitStop(30); this.triggerScreenShake(300, 8);
+            } else { this.hero.hp = 0; this.hero.state = 'DEAD'; }
         }
     }
 
     private resurrect() {
         this.hero.hp = this.hero.maxHp; this.hero.state = 'NORMAL'; this.hero.hitFlashTimer = 0; this.hero.attackCooldown = 20; this.hero.hasDealtDamage = false; this.hero.boonColor = '#fbbf24'; this.hero.element = 'NORMAL'; 
-        this.hero.currentRevives = this.hero.maxRevives; 
-        
-        // 【新增】每次死亡回到陈塘关，局内的金币清零
-        this.hero.gold = 0;
-        
+        this.hero.currentRevives = this.hero.maxRevives; this.hero.gold = 0;
         this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.enemies = []; this.obstacles = []; this.doors = []; this.roomCleared = false;
-        
         this.currentLevel = 1; this.currentScene = 'HOME'; this.hero.x = 800; this.hero.y = 600; this.homePortal.active = false; this.dialogue.active = false;
-        
-        if (this.storyPhase === 0 && this.taiyiDefeatCount > 0) {
-            this.storyPhase = 1; 
-        }
+        if (this.storyPhase === 0 && this.taiyiDefeatCount > 0) { this.storyPhase = 1; }
     }
 
     private startDialogue(lines: DialogueLine[]) {
         this.dialogue.active = true; this.dialogue.index = 0; this.dialogue.lines = lines; this.dialogue.cooldown = 15; this.hero.state = 'NORMAL'; 
     }
 
+    // ====== 【新增】过渡到和平 NPC 房间 ======
+    private transitionToNPC(npcType: 'AOGUANG' | 'PIG') {
+        this.currentScene = 'NPC_ROOM';
+        this.currentNpcType = npcType;
+        this.rewardNpcEntity.interacted = false;
+        this.hero.x = this.mapWidth / 2;
+        this.hero.y = this.mapHeight - 150;
+        this.rewardNpcEntity.x = this.mapWidth / 2;
+        this.rewardNpcEntity.y = this.mapHeight / 2 - 100;
+        this.doors = []; this.obstacles = []; this.enemies = [];
+        this.projectiles = []; this.enemyProjectiles = []; this.lightnings = [];
+        this.currentLevel++;
+    }
+
     private transitionToBattle(rewardType: RewardType) {
         this.currentScene = 'BATTLE'; this.roomCleared = false; this.expectedReward = rewardType; this.doors = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = [];
         this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150;
-        
         if (this.currentLevel === 5) {
-            const room = RoomGenerator.generateBossRoom(this.mapWidth, this.storyPhase);
-            this.obstacles = room.obstacles; this.enemies = room.enemies;
-            if (this.storyPhase === 0) this.startDialogue(GameConfig.DIALOGUES.BOSS_TAIYI_ENCOUNTER);
-            else this.startDialogue(GameConfig.DIALOGUES.BOSS_AOBING_ENCOUNTER);
+            const room = RoomGenerator.generateBossRoom(this.mapWidth, this.storyPhase); this.obstacles = room.obstacles; this.enemies = room.enemies;
+            if (this.storyPhase === 0) this.startDialogue(GameConfig.DIALOGUES.BOSS_TAIYI_ENCOUNTER); else this.startDialogue(GameConfig.DIALOGUES.BOSS_AOBING_ENCOUNTER);
             return;
         }
-        this.currentLevel++; 
-        const room = RoomGenerator.generateBattleRoom(this.mapWidth, this.mapHeight, this.hero.x, this.hero.y, this.storyPhase);
-        this.obstacles = room.obstacles; this.enemies = room.enemies;
+        this.currentLevel++; const room = RoomGenerator.generateBattleRoom(this.mapWidth, this.mapHeight, this.hero.x, this.hero.y, this.storyPhase); this.obstacles = room.obstacles; this.enemies = room.enemies;
     }
 
     private transitionToOasis() {
         this.currentScene = 'OASIS'; this.roomCleared = true; this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150; this.lotusPool.x = this.mapWidth / 2; this.lotusPool.y = this.mapHeight / 2 - 100; this.lotusPool.used = false;
-        this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); 
+        this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); this.currentLevel++;
     }
 
     private applyBoon(boon: Boon) { boon.apply(this.hero); this.hero.state = 'NORMAL'; this.currentBoons = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); }
@@ -182,58 +174,55 @@ export class GameEngine {
                 if (this.dialogue.index >= this.dialogue.lines.length) {
                     this.dialogue.active = false;
                     if (this.currentScene === 'HOME') this.homePortal.active = true;
+                    // ====== 【新增】对话结束，发放奖励并刷出下一层门 ======
+                    else if (this.currentScene === 'NPC_ROOM' && this.doors.length === 0) {
+                        if (this.currentNpcType === 'AOGUANG') this.hero.gold += 150;
+                        else if (this.currentNpcType === 'PIG') { this.hero.maxHp += 25; this.hero.hp += 25; }
+                        this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, []);
+                    }
                 }
             }
             return;
         }
 
-        if (this.hero.dashCooldown > 0) this.hero.dashCooldown--;
-        if (this.hero.attackCooldown > 0) this.hero.attackCooldown--;
-        if (this.hero.hitFlashTimer > 0) this.hero.hitFlashTimer--;
+        if (this.hero.dashCooldown > 0) this.hero.dashCooldown--; if (this.hero.attackCooldown > 0) this.hero.attackCooldown--; if (this.hero.hitFlashTimer > 0) this.hero.hitFlashTimer--;
 
         if (this.currentScene === 'HOME') {
-            const distLi = Math.sqrt(Math.pow(this.hero.x - this.npcLiJing.x, 2) + Math.pow(this.hero.y - this.npcLiJing.y, 2));
-            const distTaiyi = Math.sqrt(Math.pow(this.hero.x - this.npcTaiyi.x, 2) + Math.pow(this.hero.y - this.npcTaiyi.y, 2));
-            const distRack = Math.sqrt(Math.pow(this.hero.x - this.weaponRack.x, 2) + Math.pow(this.hero.y - this.weaponRack.y, 2));
-            const distHomePool = Math.sqrt(Math.pow(this.hero.x - this.homeLotusPool.x, 2) + Math.pow(this.hero.y - this.homeLotusPool.y, 2));
+            const distLi = Math.sqrt(Math.pow(this.hero.x - this.npcLiJing.x, 2) + Math.pow(this.hero.y - this.npcLiJing.y, 2)); const distTaiyi = Math.sqrt(Math.pow(this.hero.x - this.npcTaiyi.x, 2) + Math.pow(this.hero.y - this.npcTaiyi.y, 2)); const distRack = Math.sqrt(Math.pow(this.hero.x - this.weaponRack.x, 2) + Math.pow(this.hero.y - this.weaponRack.y, 2)); const distHomePool = Math.sqrt(Math.pow(this.hero.x - this.homeLotusPool.x, 2) + Math.pow(this.hero.y - this.homeLotusPool.y, 2));
 
             if (distHomePool < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
                 if (this.hero.maxRevives < 3) {
                     const cost = GameConfig.REVIVE_COSTS[this.hero.maxRevives];
-                    if (this.hero.spiritStones >= cost) {
-                        this.hero.spiritStones -= cost; this.hero.maxRevives++; this.hero.currentRevives++; this.dialogue.cooldown = 20;
-                    }
+                    if (this.hero.spiritStones >= cost) { this.hero.spiritStones -= cost; this.hero.maxRevives++; this.hero.currentRevives++; this.dialogue.cooldown = 20; }
                 }
-            } else if (distLi < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
-                this.startDialogue(GameConfig.DIALOGUES.LI_JING);
-            } else if (distTaiyi < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
+            } else if (distLi < 100 && Input.keys.f && this.dialogue.cooldown <= 0) { this.startDialogue(GameConfig.DIALOGUES.LI_JING); } else if (distTaiyi < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
                 if (this.taiyiDefeatCount === 0) return;
-                if (!this.unlockedWeapons.includes('SPEAR')) {
-                    this.startDialogue(GameConfig.DIALOGUES.TAIYI_UNLOCK_SPEAR); this.unlockedWeapons.push('SPEAR'); this.hero.weapon = 'SPEAR'; this.hero.attack += 20; 
-                } else if (!this.unlockedWeapons.includes('WHEELS')) {
-                    this.startDialogue(GameConfig.DIALOGUES.TAIYI_UNLOCK_WHEELS); this.unlockedWeapons.push('WHEELS'); this.hero.weapon = 'WHEELS'; this.hero.dashSpeed += 10; 
-                } else {
-                    this.hero.state = 'UPGRADING'; this.dialogue.cooldown = 15;
-                }
+                if (!this.unlockedWeapons.includes('SPEAR')) { this.startDialogue(GameConfig.DIALOGUES.TAIYI_UNLOCK_SPEAR); this.unlockedWeapons.push('SPEAR'); this.hero.weapon = 'SPEAR'; this.hero.attack += 20; } else if (!this.unlockedWeapons.includes('WHEELS')) { this.startDialogue(GameConfig.DIALOGUES.TAIYI_UNLOCK_WHEELS); this.unlockedWeapons.push('WHEELS'); this.hero.weapon = 'WHEELS'; this.hero.dashSpeed += 10; } else { this.hero.state = 'UPGRADING'; this.dialogue.cooldown = 15; }
             } else if (distRack < 100 && Input.keys.f && this.dialogue.cooldown <= 0) {
-                if (this.unlockedWeapons.length > 1) {
-                    const idx = this.unlockedWeapons.indexOf(this.hero.weapon); this.hero.weapon = this.unlockedWeapons[(idx + 1) % this.unlockedWeapons.length]; this.dialogue.cooldown = 15;
-                } else { this.startDialogue(GameConfig.DIALOGUES.EMPTY_RACK); }
+                if (this.unlockedWeapons.length > 1) { const idx = this.unlockedWeapons.indexOf(this.hero.weapon); this.hero.weapon = this.unlockedWeapons[(idx + 1) % this.unlockedWeapons.length]; this.dialogue.cooldown = 15; } else { this.startDialogue(GameConfig.DIALOGUES.EMPTY_RACK); }
             }
-
             if (this.homePortal.active) {
                 const distPortal = Math.sqrt(Math.pow(this.hero.x - this.homePortal.x, 2) + Math.pow(this.hero.y - this.homePortal.y, 2));
-                if (distPortal < 50) this.transitionToBattle('BOON'); // 第一扇门默认为赐福
+                if (distPortal < 50) this.transitionToBattle('BOON'); 
             }
-            
-        } else if (this.currentScene === 'BATTLE') {
+        } 
+        // ====== 【新增】NPC 房间交互判定 ======
+        else if (this.currentScene === 'NPC_ROOM') {
+            const distNpc = Math.sqrt(Math.pow(this.hero.x - this.rewardNpcEntity.x, 2) + Math.pow(this.hero.y - this.rewardNpcEntity.y, 2));
+            if (distNpc < this.rewardNpcEntity.radius + 80 && Input.keys.f && !this.rewardNpcEntity.interacted && this.dialogue.cooldown <= 0) {
+                this.rewardNpcEntity.interacted = true;
+                if (this.currentNpcType === 'AOGUANG') this.startDialogue(GameConfig.DIALOGUES.NPC_AOGUANG);
+                else if (this.currentNpcType === 'PIG') this.startDialogue(GameConfig.DIALOGUES.NPC_PIG);
+            }
+            this.checkDoors();
+        }
+        else if (this.currentScene === 'BATTLE') {
             this.updateEnemies(); this.updateProjectiles(); this.updateEnemyProjectiles(); this.checkDoors();
         } else if (this.currentScene === 'OASIS') {
             const distPool = Math.sqrt(Math.pow(this.hero.x - this.lotusPool.x, 2) + Math.pow(this.hero.y - this.lotusPool.y, 2));
             if (distPool < this.lotusPool.radius + 50 && Input.keys.f && !this.lotusPool.used) { this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + this.hero.maxHp * 0.5); this.lotusPool.used = true; }
             this.checkDoors();
         }
-
         this.updateHero();
     }
 
@@ -244,8 +233,7 @@ export class GameEngine {
             const distToHero = Math.sqrt(Math.pow(p.x - this.hero.x, 2) + Math.pow(p.y - this.hero.y, 2));
             if (distToHero < p.radius + this.hero.radius && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING' && this.hero.state !== 'DEAD') {
                 const dmg = Math.max(1, p.damage - this.hero.defense); this.hero.hp -= dmg; this.hero.hitFlashTimer = 10; this.triggerHitStop(50); this.triggerScreenShake(150, 4);
-                this.handleHeroDeath(); 
-                this.enemyProjectiles.splice(i, 1);
+                this.handleHeroDeath(); this.enemyProjectiles.splice(i, 1);
             }
         }
     }
@@ -282,8 +270,10 @@ export class GameEngine {
         for (const door of this.doors) {
             const dist = Math.sqrt(Math.pow(this.hero.x - door.x, 2) + Math.pow(this.hero.y - door.y, 2));
             if (dist < 50) { 
-                // 【修改】只有疗伤类型的绿洲池才会跳转到和平房间，其余 4 种全部带入战斗房
+                // ====== 【修改】根据不同路线分发跳转逻辑 ======
                 if (door.rewardType === 'HEAL') this.transitionToOasis(); 
+                else if (door.rewardType === 'GOLD') this.transitionToNPC('AOGUANG');
+                else if (door.rewardType === 'MAX_HP') this.transitionToNPC('PIG');
                 else this.transitionToBattle(door.rewardType); 
                 break; 
             }
@@ -352,15 +342,10 @@ export class GameEngine {
         if (this.hero.state !== 'DASHING' && this.hero.weapon !== 'WHEELS') {
             this.checkObstacleCollision(this.hero);
             if (this.currentScene === 'HOME') {
-                if (this.taiyiDefeatCount > 0) { 
-                    const distTaiyi = Math.sqrt(Math.pow(this.hero.x - this.npcTaiyi.x, 2) + Math.pow(this.hero.y - this.npcTaiyi.y, 2));
-                    if (distTaiyi < this.hero.radius + this.npcTaiyi.radius && distTaiyi > 0) { const overlap = (this.hero.radius + this.npcTaiyi.radius) - distTaiyi; this.hero.x += ((this.hero.x - this.npcTaiyi.x) / distTaiyi) * overlap; this.hero.y += ((this.hero.y - this.npcTaiyi.y) / distTaiyi) * overlap; }
-                }
-                const distLi = Math.sqrt(Math.pow(this.hero.x - this.npcLiJing.x, 2) + Math.pow(this.hero.y - this.npcLiJing.y, 2));
-                if (distLi < this.hero.radius + this.npcLiJing.radius && distLi > 0) { const overlap = (this.hero.radius + this.npcLiJing.radius) - distLi; this.hero.x += ((this.hero.x - this.npcLiJing.x) / distLi) * overlap; this.hero.y += ((this.hero.y - this.npcLiJing.y) / distLi) * overlap; }
+                if (this.taiyiDefeatCount > 0) { const distTaiyi = Math.sqrt(Math.pow(this.hero.x - this.npcTaiyi.x, 2) + Math.pow(this.hero.y - this.npcTaiyi.y, 2)); if (distTaiyi < this.hero.radius + this.npcTaiyi.radius && distTaiyi > 0) { const overlap = (this.hero.radius + this.npcTaiyi.radius) - distTaiyi; this.hero.x += ((this.hero.x - this.npcTaiyi.x) / distTaiyi) * overlap; this.hero.y += ((this.hero.y - this.npcTaiyi.y) / distTaiyi) * overlap; } }
+                const distLi = Math.sqrt(Math.pow(this.hero.x - this.npcLiJing.x, 2) + Math.pow(this.hero.y - this.npcLiJing.y, 2)); if (distLi < this.hero.radius + this.npcLiJing.radius && distLi > 0) { const overlap = (this.hero.radius + this.npcLiJing.radius) - distLi; this.hero.x += ((this.hero.x - this.npcLiJing.x) / distLi) * overlap; this.hero.y += ((this.hero.y - this.npcLiJing.y) / distLi) * overlap; }
             } else if (this.currentScene === 'OASIS') {
-                const distPool = Math.sqrt(Math.pow(this.hero.x - this.lotusPool.x, 2) + Math.pow(this.hero.y - this.lotusPool.y, 2));
-                if (distPool < this.hero.radius + this.lotusPool.radius && distPool > 0) { const overlap = (this.hero.radius + this.lotusPool.radius) - distPool; this.hero.x += ((this.hero.x - this.lotusPool.x) / distPool) * overlap; this.hero.y += ((this.hero.y - this.lotusPool.y) / distPool) * overlap; }
+                const distPool = Math.sqrt(Math.pow(this.hero.x - this.lotusPool.x, 2) + Math.pow(this.hero.y - this.lotusPool.y, 2)); if (distPool < this.hero.radius + this.lotusPool.radius && distPool > 0) { const overlap = (this.hero.radius + this.lotusPool.radius) - distPool; this.hero.x += ((this.hero.x - this.lotusPool.x) / distPool) * overlap; this.hero.y += ((this.hero.y - this.lotusPool.y) / distPool) * overlap; }
             }
         }
     }
@@ -404,26 +389,14 @@ export class GameEngine {
                 if (enemy.isBoss && enemy.name === '太乙真人') {
                     if (enemy.attackTimer === 30) {
                         if (enemy.attackRound === 1) { 
-                            if (dist < 300 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING') { 
-                                this.hero.hp -= 20; this.hero.hitFlashTimer = 10; this.triggerScreenShake(200, 6); 
-                                this.handleHeroDeath(); 
-                            } 
+                            if (dist < 300 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING') { this.hero.hp -= 20; this.hero.hitFlashTimer = 10; this.triggerScreenShake(200, 6); this.handleHeroDeath(); } 
                         } 
-                        else if ((enemy.attackRound || 0) >= 2) { 
-                            this.hero.hp -= 9999; 
-                            this.handleHeroDeath();
-                            if (this.hero.state === 'DEAD') { this.taiyiDefeatCount++; }
-                        }
+                        else if ((enemy.attackRound || 0) >= 2) { this.hero.hp -= 9999; this.handleHeroDeath(); if (this.hero.state === 'DEAD') { this.taiyiDefeatCount++; } }
                     }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 80; }
                 } 
                 else if (enemy.isBoss && enemy.name === '敖丙') {
-                    if (enemy.attackTimer === 30) {
-                        for(let k = 0; k < 8; k++) {
-                            const angle = (Math.PI / 4) * k;
-                            this.enemyProjectiles.push({ x: enemy.x, y: enemy.y, dirX: Math.cos(angle), dirY: Math.sin(angle), speed: 7, damage: 25, radius: 12, ownerId: enemy.id, bounces: 0 });
-                        }
-                    }
+                    if (enemy.attackTimer === 30) { for(let k = 0; k < 8; k++) { const angle = (Math.PI / 4) * k; this.enemyProjectiles.push({ x: enemy.x, y: enemy.y, dirX: Math.cos(angle), dirY: Math.sin(angle), speed: 7, damage: 25, radius: 12, ownerId: enemy.id, bounces: 0 }); } }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 70; }
                 }
                 else if (enemy.enemyType === 'RANGED') {
@@ -431,8 +404,7 @@ export class GameEngine {
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 90; }
                 } else {
                     if (enemy.attackTimer === 10 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING' && dist < 80) {
-                        const dmg = Math.max(1, 10 - this.hero.defense); this.hero.hp -= dmg; this.hero.hitFlashTimer = 10; this.triggerHitStop(40); this.triggerScreenShake(100, 4);
-                        this.handleHeroDeath(); 
+                        const dmg = Math.max(1, 10 - this.hero.defense); this.hero.hp -= dmg; this.hero.hitFlashTimer = 10; this.triggerHitStop(40); this.triggerScreenShake(100, 4); this.handleHeroDeath(); 
                     }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 60; }
                 }
@@ -446,24 +418,8 @@ export class GameEngine {
         
         if (this.enemies.length === 0 && !this.roomCleared && this.currentScene === 'BATTLE') {
             this.roomCleared = true;
-
-            // ====== 【核心修改】在此处根据门上的预告结算各种掉落物 ======
-            if (this.expectedReward === 'BOON') { 
-                this.hero.state = 'BOON_SELECTION'; this.currentBoons = BoonSystem.generateBoons(3); 
-            } 
-            else if (this.expectedReward === 'GOLD') {
-                this.hero.gold += 150; // 获得 150 金币
-                this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); 
-            }
-            else if (this.expectedReward === 'MAX_HP') {
-                this.hero.maxHp += 25; 
-                this.hero.hp += 25; // 获得 25 点最大生命值上限
-                this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); 
-            }
-            else if (this.expectedReward === 'HAMMER') {
-                this.hero.attack += 10; // 【暂时预留】简单粗暴加 10 攻击力
-                this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); 
-            }
+            if (this.expectedReward === 'BOON') { this.hero.state = 'BOON_SELECTION'; this.currentBoons = BoonSystem.generateBoons(3); } 
+            else if (this.expectedReward === 'HAMMER') { this.hero.attack += 10; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles); }
         }
     }
 
@@ -485,7 +441,12 @@ export class GameEngine {
             renderList.push({ type: 'RACK', y: this.weaponRack.y, obj: this.weaponRack });
             renderList.push({ type: 'HOME_POOL', y: this.homeLotusPool.y, obj: this.homeLotusPool });
             EnvironmentRenderer.drawHomePortal(this.rc, this.ctx, this.homePortal, this.frame); 
-        } else if (this.currentScene === 'OASIS') { renderList.push({ type: 'POOL', y: this.lotusPool.y, obj: this.lotusPool }); }
+        } else if (this.currentScene === 'OASIS') { 
+            renderList.push({ type: 'POOL', y: this.lotusPool.y, obj: this.lotusPool }); 
+        } else if (this.currentScene === 'NPC_ROOM') {
+            // ====== 【新增】渲染和平房间 NPC ======
+            renderList.push({ type: 'REWARD_NPC', y: this.rewardNpcEntity.y, obj: this.rewardNpcEntity });
+        }
 
         renderList.sort((a, b) => a.y - b.y);
 
@@ -498,17 +459,18 @@ export class GameEngine {
             else if (item.type === 'RACK') EnvironmentRenderer.drawWeaponRack(this.rc, this.ctx, item.obj, this.hero, this.unlockedWeapons);
             else if (item.type === 'POOL') EnvironmentRenderer.drawOasis(this.rc, this.ctx, this.hero, item.obj);
             else if (item.type === 'HOME_POOL') EnvironmentRenderer.drawHomeLotusPool(this.rc, this.ctx, item.obj, this.hero, GameConfig.REVIVE_COSTS);
+            // ====== 【新增】调用新 NPC 渲染方法 ======
+            else if (item.type === 'REWARD_NPC') {
+                if (this.currentNpcType === 'AOGUANG') EntityRenderer.drawAoGuang(this.rc, this.ctx, this.hero, item.obj, item.obj.interacted, this.dialogue.active, this.frame);
+                else if (this.currentNpcType === 'PIG') EntityRenderer.drawFlyingPig(this.rc, this.ctx, this.hero, item.obj, item.obj.interacted, this.dialogue.active, this.frame);
+            }
         }
 
         if (this.hero.state === 'REVIVING') {
-            this.ctx.save();
-            this.ctx.translate(this.hero.x, this.hero.y);
-            const progress = 1 - (this.hero.reviveTimer / 90);
-            this.ctx.rotate(progress * Math.PI * 4); 
+            this.ctx.save(); this.ctx.translate(this.hero.x, this.hero.y); const progress = 1 - (this.hero.reviveTimer / 90); this.ctx.rotate(progress * Math.PI * 4); 
             this.rc.circle(0, 0, progress * 150, { stroke: '#f472b6', strokeWidth: 4, roughness: 2 });
             this.rc.ellipse(0, 0, progress * 120, progress * 40, { fill: 'rgba(236, 72, 153, 0.6)', fillStyle: 'solid', stroke: 'none' });
-            this.rc.ellipse(0, 0, progress * 40, progress * 120, { fill: 'rgba(236, 72, 153, 0.6)', fillStyle: 'solid', stroke: 'none' });
-            this.ctx.restore();
+            this.rc.ellipse(0, 0, progress * 40, progress * 120, { fill: 'rgba(236, 72, 153, 0.6)', fillStyle: 'solid', stroke: 'none' }); this.ctx.restore();
         }
 
         if (this.currentScene !== 'HOME') {

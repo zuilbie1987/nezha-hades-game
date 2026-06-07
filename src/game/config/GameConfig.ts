@@ -35,7 +35,6 @@ export const GameConfig = {
             { speaker: '系统', text: '武器架上空空如也，或许哪天能获得一把长柄神兵...', color: '#4b5563' }
         ] as DialogueLine[],
 
-        // 【新增】Boss 战前剧情对话
         BOSS_TAIYI_ENCOUNTER: [
             { speaker: '太乙真人', text: '痴儿，你脑海中的暴戾之气太重，若破不了为师这九龙神火幻境，便乖乖回陈塘关禁闭吧！', color: '#10b981' },
             { speaker: '哪吒', text: '胖师傅，你这幻境也太无聊了！看我砸碎它回到现世！', color: '#dc2626' }
@@ -44,6 +43,20 @@ export const GameConfig = {
         BOSS_AOBING_ENCOUNTER: [
             { speaker: '敖丙', text: '李哪吒！你这妖童竟敢来我东海生事，今日便要你神魂俱灭！', color: '#0ea5e9' },
             { speaker: '哪吒', text: '小泥鳅，本少爷刚从幻境里憋了一肚子火，正愁没处发泄！抽了你的龙筋！', color: '#dc2626' }
+        ] as DialogueLine[],
+
+        // ====== 【新增】NPC 奖励房间对话 ======
+        NPC_AOGUANG: [
+            { speaker: '敖广虚影', text: '小魔头，拿了这些龙宫秘宝，速速滚出本王的视野！', color: '#0ea5e9' },
+            { speaker: '哪吒', text: '老泥鳅，这点钱就想打发小爷？下次我还要来！', color: '#dc2626' },
+            { speaker: '系统', text: '（勒索成功！获得 150 金币！）', color: '#eab308' }
+        ] as DialogueLine[],
+
+        NPC_PIG: [
+            { speaker: '神猪', text: '（呼噜噜... 吧唧吧唧... 嗝！）', color: '#f472b6' },
+            { speaker: '哪吒', text: '胖师傅的坐骑？正好小爷饿了，把你的好吃的交出来！', color: '#dc2626' },
+            { speaker: '神猪', text: '（惊醒！吐出一口粉色仙气笼罩了你，随后哼唧唧地飞走了）', color: '#f472b6' },
+            { speaker: '系统', text: '（吸收仙气！生命上限永久提升 25 点，并恢复 25 点生命值！）', color: '#ef4444' }
         ] as DialogueLine[]
     }
 };
