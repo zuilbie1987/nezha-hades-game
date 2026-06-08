@@ -6,6 +6,11 @@ on:
   push:
     branches:
       - main
+
+      # ====== 强制让 GitHub Actions 使用最新的 Node.js 24 环境 ======
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+# ====================================================================
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
