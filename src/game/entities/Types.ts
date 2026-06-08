@@ -42,7 +42,7 @@ export interface Boon {
 export interface Obstacle { x: number; y: number; radius: number; type: 'ROCK' | 'BAMBOO' | 'POND' | 'CORAL'; }
 
 // --- 新增：奖励类型定义 ---
-export type RewardType = 'BOON' | 'HEAL' | 'GOLD' | 'MAX_HP' | 'HAMMER';
+export type RewardType = 'BOON' | 'HEAL' | 'GOLD' | 'MAX_HP' | 'HAMMER' | 'BOSS';
 // --- 新增：门的数据结构，玩家通过门进入下一层，门上会显示奖励类型（如赐福、治疗等）
 export interface Door { x: number; y: number; radius: number; rewardType: RewardType; }
 
