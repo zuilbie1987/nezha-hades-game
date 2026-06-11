@@ -309,6 +309,44 @@ export class EntityRenderer {
         }
     }
 
+    // ====== 【新增】渲染伤害飘字与暴击特效 ======
+    static drawDamageTexts(ctx: CanvasRenderingContext2D, texts: any[]) {
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        for (const t of texts) {
+            // 在生命的最后 15 帧开始透明淡出
+            const alpha = Math.min(1, t.life / 15); 
+            ctx.globalAlpha = alpha;
+            
+            if (t.isCrit) {
+                // 暴击：带有轻微弹跳放大的特效
+                const scale = 1 + Math.sin((t.maxLife - t.life) * 0.2) * 0.3; 
+                ctx.save();
+                ctx.translate(t.x, t.y);
+                ctx.scale(scale, scale);
+                ctx.font = '900 26px "Comic Sans MS", cursive, sans-serif';
+                ctx.fillStyle = '#facc15';     // 暴击金黄
+                ctx.strokeStyle = '#b91c1c';   // 暴击暗红边框
+                ctx.lineWidth = 4;
+                ctx.strokeText('暴击 ' + t.value + '!', 0, 0);
+                ctx.fillText('暴击 ' + t.value + '!', 0, 0);
+                ctx.restore();
+            } else {
+                // 普通伤害：白底深灰边框
+                ctx.font = 'bold 20px "Comic Sans MS", cursive, sans-serif';
+                ctx.fillStyle = '#fff';
+                ctx.strokeStyle = '#374151';
+                ctx.lineWidth = 3;
+                ctx.strokeText(t.value.toString(), t.x, t.y);
+                ctx.fillText(t.value.toString(), t.x, t.y);
+            }
+        }
+        ctx.restore();
+    }
+
+
     // ====== 【新增】青铜结界兽 (神兵重铸 NPC) ======
     static drawBarrierBeasts(rc: any, ctx: CanvasRenderingContext2D, hero: any, npc: any, interacted: boolean, dialogueActive: boolean, frame: number) {
         ctx.save();

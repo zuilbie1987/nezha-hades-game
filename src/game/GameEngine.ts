@@ -1,6 +1,6 @@
 import rough from 'roughjs';
 import { Input } from '../engine/Input';
-import type { Enemy, DialogueLine, Boon, Obstacle, Door, WeaponType, Projectile, EnemyProjectile, ElementType, RewardType } from './entities/Types';
+import type { Enemy, DialogueLine, Boon, Obstacle, Door, WeaponType, Projectile, EnemyProjectile, ElementType, RewardType, DamageText } from './entities/Types';
 import { DialogueUI } from './ui/DialogueUI';
 import { GameHUD } from './ui/GameHUD';
 import { BoonSystem } from './systems/BoonSystem';
@@ -29,6 +29,8 @@ export class GameEngine {
     private hero = { 
         x: 800, y: 600, speed: 5, radius: 25,
         hp: 100, maxHp: 100, attack: 15, defense: 0, spiritStones: 0, gold: 0, 
+        // ====== 【新增】初始天生附带 15% 的暴击率 ======
+        critRate: 0.15, 
         state: 'NORMAL', dirX: 1, dirY: 0,
         dashTimer: 0, dashDuration: 8, dashSpeed: 15, dashCooldown: 0,
         attackTimer: 0, attackDuration: 15, attackCooldown: 0, attackThrustSpeed: 3,
@@ -41,6 +43,9 @@ export class GameEngine {
     private projectiles: Projectile[] = []; 
     private enemyProjectiles: EnemyProjectile[] = []; 
     private lightnings: { x1: number, y1: number, x2: number, y2: number, duration: number }[] = [];
+    
+    // ====== 【新增】存放在屏幕上飘动的数字 ======
+    private damageTexts: DamageText[] = []; 
 
     private npcLiJing = { x: 800, y: 220, radius: 40 };       
     private weaponRack = { x: 350, y: 550, radius: 40 };      
@@ -52,10 +57,7 @@ export class GameEngine {
     
     private currentNpcType: 'AOGUANG' | 'PIG' | 'BEASTS' | null = null;
     private rewardNpcEntity = { x: 800, y: 400, radius: 60, interacted: false };
-
-    // ====== 【修补】加入主线阶段过渡信使 ======
     private postDialogueAction: 'AOBING_DEAD' | 'LIJING_DEAD' | null = null;
-
     private dialogue = { active: false, index: 0, lines: [] as DialogueLine[], cooldown: 0 };
     private mapWidth = 1600; private mapHeight = 1200;
     private enemies: Enemy[] = []; private obstacles: Obstacle[] = []; private doors: Door[] = [];         
@@ -74,6 +76,28 @@ export class GameEngine {
     private triggerHitStop(ms: number) { this.hitStopTimer = ms; }
     private triggerScreenShake(ms: number, mag: number) { this.shakeTimer = ms; this.shakeMagnitude = mag; }
 
+    // ====== 【核心新增】统一的伤害结算通道 ======
+    private dealDamageToEnemy(enemy: Enemy, baseDamage: number, canCrit: boolean = true) {
+        // 判定暴击
+        const isCrit = canCrit && (Math.random() < this.hero.critRate);
+        const finalDamage = Math.floor(isCrit ? baseDamage * 2 : baseDamage);
+        
+        enemy.hp -= finalDamage;
+        
+        // 实例化飘字对象（带有一些随机的初始物理抛物线速度）
+        const tx = enemy.x + (Math.random() - 0.5) * 40;
+        const ty = enemy.y - enemy.radius - Math.random() * 20;
+        this.damageTexts.push({
+            x: tx, y: ty, 
+            value: finalDamage, isCrit,
+            life: 45, maxLife: 45,
+            vx: (Math.random() - 0.5) * 2, 
+            vy: -1.5 - Math.random() * 1.5 
+        });
+        
+        return finalDamage;
+    }
+
     private applyElementalStatus(targetEnemy: Enemy, baseDamage: number) {
         if (this.hero.element === 'FIRE') { targetEnemy.burnTimer = 300; } 
         else if (this.hero.element === 'ICE') { targetEnemy.frostTimer = 240; } 
@@ -83,7 +107,9 @@ export class GameEngine {
                 if (other.id === targetEnemy.id || other.hp <= 0) continue;
                 const dist = Math.sqrt(Math.pow(targetEnemy.x - other.x, 2) + Math.pow(targetEnemy.y - other.y, 2));
                 if (dist < 300) { 
-                    other.hp -= Math.floor(baseDamage * 0.6); other.hitFlashTimer = 6;
+                    // 【修改】闪电连锁也走统一扣血，且不参与暴击计算以免过强
+                    this.dealDamageToEnemy(other, baseDamage * 0.6, false);
+                    other.hitFlashTimer = 6;
                     this.lightnings.push({ x1: targetEnemy.x, y1: targetEnemy.y, x2: other.x, y2: other.y, duration: 8 });
                     chains++; if (chains >= 2) break;
                 }
@@ -105,46 +131,42 @@ export class GameEngine {
         this.hero.currentRevives = this.hero.maxRevives; this.hero.gold = 0;
         this.hero.weaponUpgrades = { 'RING': false, 'SASH': false, 'SPEAR': false, 'WHEELS': false };
         this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.enemies = []; this.obstacles = []; this.doors = []; this.roomCleared = false;
+        
+        // 【新增】清空屏幕遗留飘字
+        this.damageTexts = [];
+        
         this.currentLevel = 1; this.currentScene = 'HOME'; this.hero.x = 800; this.hero.y = 600; this.homePortal.active = false; this.dialogue.active = false;
         if (this.storyPhase === 0 && this.taiyiDefeatCount > 0) { this.storyPhase = 1; }
     }
 
-    private startDialogue(lines: DialogueLine[]) {
-        this.dialogue.active = true; this.dialogue.index = 0; this.dialogue.lines = lines; this.dialogue.cooldown = 15; this.hero.state = 'NORMAL'; 
-    }
+    private startDialogue(lines: DialogueLine[]) { this.dialogue.active = true; this.dialogue.index = 0; this.dialogue.lines = lines; this.dialogue.cooldown = 15; this.hero.state = 'NORMAL'; }
 
     private transitionToNPC(npcType: 'AOGUANG' | 'PIG' | 'BEASTS') {
         this.currentScene = 'NPC_ROOM'; this.currentNpcType = npcType; this.rewardNpcEntity.interacted = false;
         this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150;
         this.rewardNpcEntity.x = this.mapWidth / 2; this.rewardNpcEntity.y = this.mapHeight / 2 - 100;
-        this.doors = []; this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.currentLevel++;
+        this.doors = []; this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.damageTexts = []; this.currentLevel++;
     }
 
     private transitionToBattle(rewardType: RewardType) {
-        this.currentScene = 'BATTLE'; this.roomCleared = false; this.expectedReward = rewardType; this.doors = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = [];
+        this.currentScene = 'BATTLE'; this.roomCleared = false; this.expectedReward = rewardType; this.doors = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.damageTexts = [];
         this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150;
-        
-        // ====== 【核心修复】无论进什么门，先增加当前层数 ======
         this.currentLevel++; 
 
-        // ====== 【核心修复】直接认准 Boss 门标记，强行召唤首领 ======
         if (rewardType === 'BOSS') {
             const room = RoomGenerator.generateBossRoom(this.mapWidth, this.storyPhase); this.obstacles = room.obstacles; this.enemies = room.enemies;
-            
-            // 剧情识别播放
             if (this.storyPhase === 0) this.startDialogue(GameConfig.DIALOGUES.BOSS_TAIYI_ENCOUNTER); 
             else if (this.storyPhase === 1) this.startDialogue(GameConfig.DIALOGUES.BOSS_AOBING_ENCOUNTER); 
             else this.startDialogue(GameConfig.DIALOGUES.BOSS_LIJING_ENCOUNTER);
             return;
         }
         
-        // 如果不是 Boss 门，则正常生成小怪房间
         const room = RoomGenerator.generateBattleRoom(this.mapWidth, this.mapHeight, this.hero.x, this.hero.y, this.storyPhase); this.obstacles = room.obstacles; this.enemies = room.enemies;
     }
 
     private transitionToOasis() {
         this.currentScene = 'OASIS'; this.roomCleared = true; this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150; this.lotusPool.x = this.mapWidth / 2; this.lotusPool.y = this.mapHeight / 2 - 100; this.lotusPool.used = false;
-        this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles, this.currentLevel); this.currentLevel++;
+        this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.damageTexts = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles, this.currentLevel); this.currentLevel++;
     }
 
     private applyBoon(boon: Boon) { boon.apply(this.hero); this.hero.state = 'NORMAL'; this.currentBoons = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles, this.currentLevel); }
@@ -152,6 +174,15 @@ export class GameEngine {
     private update() {
         this.frame++;
         for (let i = this.lightnings.length - 1; i >= 0; i--) { this.lightnings[i].duration--; if (this.lightnings[i].duration <= 0) this.lightnings.splice(i, 1); }
+
+        // ====== 【新增】处理所有伤害文字的漂浮生命周期 ======
+        for (let i = this.damageTexts.length - 1; i >= 0; i--) {
+            const dt = this.damageTexts[i];
+            dt.x += dt.vx;
+            dt.y += dt.vy;
+            dt.life--;
+            if (dt.life <= 0) this.damageTexts.splice(i, 1);
+        }
 
         if (this.hero.state === 'DEAD') { if (Input.keys.f) this.resurrect(); return; }
 
@@ -181,18 +212,8 @@ export class GameEngine {
                 if (this.dialogue.index >= this.dialogue.lines.length) {
                     this.dialogue.active = false;
                     
-                    // ====== 【修补】对话完毕后执行剧情推移与回城 ======
-                    if (this.postDialogueAction === 'AOBING_DEAD') {
-                        this.storyPhase = 2; 
-                        this.postDialogueAction = null;
-                        this.resurrect(); 
-                        return;
-                    } else if (this.postDialogueAction === 'LIJING_DEAD') {
-                        this.storyPhase = 2; // 游戏通关核心循环，依然留在高难度的第 2 阶段
-                        this.postDialogueAction = null;
-                        this.resurrect(); 
-                        return;
-                    }
+                    if (this.postDialogueAction === 'AOBING_DEAD') { this.storyPhase = 2; this.postDialogueAction = null; this.resurrect(); return; } 
+                    else if (this.postDialogueAction === 'LIJING_DEAD') { this.storyPhase = 2; this.postDialogueAction = null; this.resurrect(); return; }
 
                     if (this.currentScene === 'HOME') this.homePortal.active = true;
                     else if (this.currentScene === 'NPC_ROOM' && this.doors.length === 0) {
@@ -273,7 +294,9 @@ export class GameEngine {
                 if (enemy.hp <= 0 || p.hitEnemies.includes(enemy.id)) continue;
                 const dist = Math.sqrt(Math.pow(p.x - enemy.x, 2) + Math.pow(p.y - enemy.y, 2));
                 if (dist < 25 + enemy.radius) {
-                    enemy.hp -= p.damage; enemy.hitFlashTimer = 8; p.hitEnemies.push(enemy.id);
+                    // ====== 【修改】乾坤圈走统一伤害结算 ======
+                    this.dealDamageToEnemy(enemy, p.damage);
+                    enemy.hitFlashTimer = 8; p.hitEnemies.push(enemy.id);
                     this.applyElementalStatus(enemy, p.damage); this.triggerHitStop(30);
                     if (p.bouncesLeft > 0) {
                         p.bouncesLeft--; p.damage = Math.floor(p.damage * 0.7); let nextTarget = null; let minDist = Infinity;
@@ -352,7 +375,11 @@ export class GameEngine {
                     const hitboxX = this.hero.x + this.hero.dirX * 80; const hitboxY = this.hero.y + this.hero.dirY * 80; let hitAny = false;
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; const dist = Math.sqrt(Math.pow(enemy.x - hitboxX, 2) + Math.pow(enemy.y - hitboxY, 2));
-                        if (dist < (upg ? 80 : 50) + enemy.radius) { enemy.hp -= this.hero.attack * (upg ? 1.5 : 1); enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 20; enemy.y += this.hero.dirY * 20; this.applyElementalStatus(enemy, this.hero.attack); hitAny = true; }
+                        // ====== 【修改】长枪突刺走统一伤害结算 ======
+                        if (dist < (upg ? 80 : 50) + enemy.radius) { 
+                            this.dealDamageToEnemy(enemy, this.hero.attack * (upg ? 1.5 : 1)); 
+                            enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 20; enemy.y += this.hero.dirY * 20; this.applyElementalStatus(enemy, this.hero.attack); hitAny = true; 
+                        }
                     }
                     if (hitAny) { this.triggerHitStop(60); this.triggerScreenShake(100, 6); } this.hero.hasDealtDamage = true; 
                 }
@@ -361,7 +388,11 @@ export class GameEngine {
                     const upg = this.hero.weaponUpgrades['SASH']; let hitAny = false;
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; const dx = enemy.x - this.hero.x; const dy = enemy.y - this.hero.y; const dist = Math.sqrt(dx*dx + dy*dy);
-                        if (dist < (upg ? 250 : 150) + enemy.radius) { enemy.hp -= this.hero.attack * (upg ? 1.5 : 0.8); enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 40; enemy.y += this.hero.dirY * 40; this.applyElementalStatus(enemy, this.hero.attack * (upg ? 1.5 : 0.8)); hitAny = true; }
+                        // ====== 【修改】混天绫走统一伤害结算 ======
+                        if (dist < (upg ? 250 : 150) + enemy.radius) { 
+                            this.dealDamageToEnemy(enemy, this.hero.attack * (upg ? 1.5 : 0.8)); 
+                            enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 40; enemy.y += this.hero.dirY * 40; this.applyElementalStatus(enemy, this.hero.attack * (upg ? 1.5 : 0.8)); hitAny = true; 
+                        }
                     }
                     if (hitAny) { this.triggerHitStop(80); this.triggerScreenShake(200, 5); }
                 }
@@ -374,7 +405,11 @@ export class GameEngine {
                 if (!this.hero.hasDealtDamage) {
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; const dist = Math.sqrt(Math.pow(enemy.x - this.hero.x, 2) + Math.pow(enemy.y - this.hero.y, 2));
-                        if (dist < 60 + enemy.radius) { enemy.hp -= this.hero.attack * (upg ? 0.6 : 0.4); enemy.hitFlashTimer = 5; this.applyElementalStatus(enemy, this.hero.attack * 0.4); this.triggerScreenShake(50, 2); }
+                        // ====== 【修改】风火轮走统一伤害结算 ======
+                        if (dist < 60 + enemy.radius) { 
+                            this.dealDamageToEnemy(enemy, this.hero.attack * (upg ? 0.6 : 0.4)); 
+                            enemy.hitFlashTimer = 5; this.applyElementalStatus(enemy, this.hero.attack * 0.4); this.triggerScreenShake(50, 2); 
+                        }
                     }
                     this.hero.hasDealtDamage = true;
                 }
@@ -400,23 +435,20 @@ export class GameEngine {
             const enemy = this.enemies[i];
             if (enemy.hitFlashTimer > 0) enemy.hitFlashTimer--; if (enemy.attackCooldown > 0) enemy.attackCooldown--;
 
-            if (enemy.burnTimer && enemy.burnTimer > 0) { enemy.burnTimer--; if (this.frame % 30 === 0) { enemy.hp -= 4; enemy.hitFlashTimer = 4; } }
+            // ====== 【修改】让火系异常的灼烧也能不断飘字 (并且不能触发暴击套娃) ======
+            if (enemy.burnTimer && enemy.burnTimer > 0) { 
+                enemy.burnTimer--; 
+                if (this.frame % 30 === 0) { 
+                    this.dealDamageToEnemy(enemy, 4, false); 
+                    enemy.hitFlashTimer = 4; 
+                } 
+            }
+            
             let speedMultiplier = 1; if (enemy.frostTimer && enemy.frostTimer > 0) { enemy.frostTimer--; speedMultiplier = 0.5; }
 
             if (enemy.hp <= 0 && enemy.hitFlashTimer <= 0) {
-                // ====== 【修补】触发主线剧情：击杀首领拦截 ======
-                if (enemy.isBoss && enemy.name === '敖丙') {
-                    this.enemies.splice(i, 1);
-                    this.postDialogueAction = 'AOBING_DEAD';
-                    this.startDialogue(GameConfig.DIALOGUES.AOBING_DEFEATED);
-                    continue;
-                } else if (enemy.isBoss && enemy.name === '李靖') {
-                    this.enemies.splice(i, 1);
-                    this.postDialogueAction = 'LIJING_DEAD';
-                    this.startDialogue(GameConfig.DIALOGUES.LIJING_DEFEATED);
-                    continue;
-                }
-
+                if (enemy.isBoss && enemy.name === '敖丙') { this.enemies.splice(i, 1); this.postDialogueAction = 'AOBING_DEAD'; this.startDialogue(GameConfig.DIALOGUES.AOBING_DEFEATED); continue; } 
+                else if (enemy.isBoss && enemy.name === '李靖') { this.enemies.splice(i, 1); this.postDialogueAction = 'LIJING_DEAD'; this.startDialogue(GameConfig.DIALOGUES.LIJING_DEFEATED); continue; }
                 if (!enemy.isBoss) { this.hero.spiritStones += Math.floor(Math.random() * (GameConfig.STONE_DROP_MAX - GameConfig.STONE_DROP_MIN + 1)) + GameConfig.STONE_DROP_MIN; }
                 this.enemies.splice(i, 1); continue;
             }
@@ -445,34 +477,17 @@ export class GameEngine {
             } else if (enemy.state === 'ATTACKING') {
                 enemy.attackTimer--;
                 if (enemy.isBoss && enemy.name === '太乙真人') {
-                    if (enemy.attackTimer === 30) {
-                        if (enemy.attackRound === 1) { 
-                            if (dist < 300 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING') { this.hero.hp -= 20; this.hero.hitFlashTimer = 10; this.triggerScreenShake(200, 6); this.handleHeroDeath(); } 
-                        } 
-                        else if ((enemy.attackRound || 0) >= 2) { 
-                            this.hero.hp -= 9999; this.handleHeroDeath(); 
-                            if (this.hero.state === 'DEAD') { this.taiyiDefeatCount++; } 
-                        }
-                    }
+                    if (enemy.attackTimer === 30) { if (enemy.attackRound === 1) { if (dist < 300 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING') { this.hero.hp -= 20; this.hero.hitFlashTimer = 10; this.triggerScreenShake(200, 6); this.handleHeroDeath(); } } else if ((enemy.attackRound || 0) >= 2) { this.hero.hp -= 9999; this.handleHeroDeath(); if (this.hero.state === 'DEAD') { this.taiyiDefeatCount++; } } }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 80; }
                 } 
                 else if (enemy.isBoss && enemy.name === '敖丙') {
                     if (enemy.attackTimer === 30) { for(let k = 0; k < 8; k++) { const angle = (Math.PI / 4) * k; this.enemyProjectiles.push({ x: enemy.x, y: enemy.y, dirX: Math.cos(angle), dirY: Math.sin(angle), speed: 7, damage: 25, radius: 12, ownerId: enemy.id, bounces: 0 }); } }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 70; }
                 }
-                // ====== 【修补】加入李靖的终极镇压攻击 ======
                 else if (enemy.isBoss && enemy.name === '李靖') {
                     if (enemy.attackTimer === 30) {
-                        if (enemy.attackRound === 1) { 
-                            // 天罡剑气：近战极大范围伤害
-                            if (dist < 200 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING') { 
-                                this.hero.hp -= 25; this.hero.hitFlashTimer = 10; this.triggerScreenShake(100, 4); this.handleHeroDeath(); 
-                            } 
-                        } 
-                        else if ((enemy.attackRound || 0) >= 2) { 
-                            // 玲珑宝塔：全图精准制导，超大范围，毁天灭地
-                            this.enemyProjectiles.push({ x: this.hero.x, y: this.hero.y - 150, dirX: 0, dirY: 1, speed: 6, damage: 45, radius: 60, ownerId: enemy.id, bounces: 0 });
-                        }
+                        if (enemy.attackRound === 1) { if (dist < 200 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING') { this.hero.hp -= 25; this.hero.hitFlashTimer = 10; this.triggerScreenShake(100, 4); this.handleHeroDeath(); } } 
+                        else if ((enemy.attackRound || 0) >= 2) { this.enemyProjectiles.push({ x: this.hero.x, y: this.hero.y - 150, dirX: 0, dirY: 1, speed: 6, damage: 45, radius: 60, ownerId: enemy.id, bounces: 0 }); }
                     }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 60; }
                 }
@@ -480,17 +495,12 @@ export class GameEngine {
                     if (enemy.attackTimer === 10) { this.enemyProjectiles.push({ x: enemy.x, y: enemy.y, dirX: enemy.dirX, dirY: enemy.dirY, speed: 8, damage: 15, radius: 10, ownerId: enemy.id, bounces: 0 }); }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 90; }
                 } else {
-                    if (enemy.attackTimer === 10 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING' && dist < 80) {
-                        const dmg = Math.max(1, 10 - this.hero.defense); this.hero.hp -= dmg; this.hero.hitFlashTimer = 10; this.triggerHitStop(40); this.triggerScreenShake(100, 4); this.handleHeroDeath(); 
-                    }
+                    if (enemy.attackTimer === 10 && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING' && dist < 80) { const dmg = Math.max(1, 10 - this.hero.defense); this.hero.hp -= dmg; this.hero.hitFlashTimer = 10; this.triggerHitStop(40); this.triggerScreenShake(100, 4); this.handleHeroDeath(); }
                     if (enemy.attackTimer <= 0) { enemy.state = 'CHASING'; enemy.attackCooldown = 60; }
                 }
             }
 
-            if (this.hero.state !== 'DASHING') {
-                const minDist = this.hero.radius + enemy.radius;
-                if (dist < minDist && dist > 0) { const overlap = minDist - dist; this.hero.x += (this.hero.x - enemy.x) / dist * overlap; this.hero.y += (this.hero.y - enemy.y) / dist * overlap; }
-            }
+            if (this.hero.state !== 'DASHING') { const minDist = this.hero.radius + enemy.radius; if (dist < minDist && dist > 0) { const overlap = minDist - dist; this.hero.x += (this.hero.x - enemy.x) / dist * overlap; this.hero.y += (this.hero.y - enemy.y) / dist * overlap; } }
         }
         
         if (this.enemies.length === 0 && !this.roomCleared && this.currentScene === 'BATTLE') {
@@ -555,7 +565,12 @@ export class GameEngine {
             EntityRenderer.drawEnemyProjectiles(this.rc, this.ctx, this.enemyProjectiles, this.frame);
             EntityRenderer.drawLightningArcs(this.rc, this.lightnings);
         }
-        HeroRenderer.drawProjectiles(this.rc, this.ctx, this.projectiles, this.frame); this.ctx.restore();
+        HeroRenderer.drawProjectiles(this.rc, this.ctx, this.projectiles, this.frame); 
+
+        // ====== 【新增】渲染位于顶层的伤害数字飘字 ======
+        EntityRenderer.drawDamageTexts(this.ctx, this.damageTexts);
+
+        this.ctx.restore();
         
         GameHUD.draw(this.rc, this.ctx, this.hero, this.currentScene); DialogueUI.draw(this.rc, this.ctx, this.frame, this.dialogue);
         if (this.hero.state === 'BOON_SELECTION') BoonUI.draw(this.rc, this.ctx, this.currentBoons);

@@ -25,7 +25,7 @@ export interface Enemy {
     burnTimer?: number;   // 燃烧剩余时间
     frostTimer?: number;  // 冰冻减速剩余时间
 }
-export interface DialogueLine { /*...*/ speaker: string; text: string; color: string; }
+export interface DialogueLine { speaker: string; text: string; color: string; }
 
 // --- 新增：神明赐福数据结构 ---
 export interface Boon {
@@ -49,17 +49,18 @@ export interface Door { x: number; y: number; radius: number; rewardType: Reward
 export type WeaponType = 'SPEAR' | 'RING' | 'SASH' | 'WHEELS'; 
 
 export interface Projectile {
-    x: number; 
-    y: number;
-    dirX: number; 
-    dirY: number;
-    speed: number;
-    damage: number;       
-    bouncesLeft: number;  
-    hitEnemies: number[]; 
-    state: 'FLYING' | 'RETURNING'; 
-    color: string;        
+    x: number; y: number; dirX: number; dirY: number;
+    speed: number; damage: number; bouncesLeft: number;  
+    hitEnemies: number[]; state: 'FLYING' | 'RETURNING'; color: string;        
 }
-// 【新增】元素类型定义
+
 export type ElementType = 'NORMAL' | 'FIRE' | 'THUNDER' | 'ICE';
 
+// ====== 【新增】伤害飘字数据结构 ======
+export interface DamageText {
+    x: number; y: number;          // 当前坐标
+    value: number;                 // 伤害数值
+    isCrit: boolean;               // 是否暴击
+    life: number; maxLife: number; // 剩余寿命与总寿命（用于计算淡出）
+    vx: number; vy: number;        // X和Y轴的飘动速度
+}
