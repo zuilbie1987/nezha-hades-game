@@ -27,16 +27,18 @@ export class GameEngine {
 
     private hero = { 
         x: 800, y: 600, speed: 5, radius: 25,
-        hp: 100, maxHp: 100, attack: 15, defense: 0, spiritStones: 0, gold: 0, critRate: 0.15, 
+        // ====== 【核心修复 1】分离基础(永久)属性和局内(临时)属性 ======
+        hp: 100, maxHp: 100, baseMaxHp: 100, 
+        attack: 15, baseAttack: 15, 
+        defense: 0, baseDefense: 0, 
+        
+        spiritStones: 0, gold: 0, critRate: 0.15, 
         state: 'NORMAL', dirX: 1, dirY: 0,
         dashTimer: 0, dashDuration: 8, dashSpeed: 15, dashCooldown: 0,
         attackTimer: 0, attackDuration: 15, attackCooldown: 0, attackThrustSpeed: 3,
         hasDealtDamage: false, hitFlashTimer: 0,
         weapon: 'RING' as WeaponType, ringBounces: 3, 
-        
-        // ====== 【核心修改】废弃单赐福，启用强大的三槽位流派 ======
         boons: { ATTACK: null, DASH: null, PASSIVE: null } as Record<BoonSlot, Boon | null>,
-
         maxRevives: 0, currentRevives: 0, reviveTimer: 0,
         weaponUpgrades: { 'RING': false, 'SASH': false, 'SPEAR': false, 'WHEELS': false } as Record<WeaponType, boolean>
     };
@@ -64,7 +66,6 @@ export class GameEngine {
         const isCrit = canCrit && (Math.random() < this.hero.critRate);
         let finalDamage = Math.floor(isCrit ? baseDamage * 2 : baseDamage);
         
-        // ====== 【新增被动槽】豹子胆：暴击附加 20 真实伤害 ======
         if (isCrit && this.hero.boons.PASSIVE?.id === 'p3') {
             finalDamage += 20;
         }
@@ -75,7 +76,6 @@ export class GameEngine {
         return finalDamage;
     }
 
-    // 【修改】接受动态传入元素类型
     private applyElementalStatus(targetEnemy: Enemy, baseDamage: number, element: ElementType) {
         if (element === 'FIRE') { targetEnemy.burnTimer = 300; } 
         else if (element === 'ICE') { targetEnemy.frostTimer = 240; } 
@@ -104,11 +104,15 @@ export class GameEngine {
     }
 
     private resurrect() {
+        // ====== 【核心修复 2】死亡后清空局内增益与减益，强行重置为 Base 永久属性 ======
+        this.hero.maxHp = this.hero.baseMaxHp;
+        this.hero.attack = this.hero.baseAttack;
+        this.hero.defense = this.hero.baseDefense;
+
         this.hero.hp = this.hero.maxHp; this.hero.state = 'NORMAL'; this.hero.hitFlashTimer = 0; this.hero.attackCooldown = 20; this.hero.hasDealtDamage = false; 
         this.hero.currentRevives = this.hero.maxRevives; this.hero.gold = 0;
         this.hero.weaponUpgrades = { 'RING': false, 'SASH': false, 'SPEAR': false, 'WHEELS': false };
         
-        // ====== 【修改】复活清空所有槽位 ======
         this.hero.boons = { ATTACK: null, DASH: null, PASSIVE: null };
 
         this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.enemies = []; this.obstacles = []; this.doors = []; this.roomCleared = false; this.damageTexts = [];
@@ -133,7 +137,6 @@ export class GameEngine {
         this.currentScene = 'OASIS'; this.roomCleared = true; this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150; this.lotusPool.x = this.mapWidth / 2; this.lotusPool.y = this.mapHeight / 2 - 100; this.lotusPool.used = false; this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.damageTexts = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles, this.currentLevel); this.currentLevel++;
     }
     
-    // ====== 【修改】拾取赐福放入对应槽位 ======
     private applyBoon(boon: Boon) { 
         this.hero.boons[boon.slot] = boon; 
         this.hero.state = 'NORMAL'; this.currentBoons = []; this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, this.obstacles, this.currentLevel); 
@@ -146,7 +149,6 @@ export class GameEngine {
 
         if (this.hero.state === 'DEAD') { if (Input.keys.f) this.resurrect(); return; }
 
-        // ====== 【新增被动槽】太乙真人 造化青莲：缓慢回血 ======
         if (this.hero.state !== 'DEAD' && this.hero.boons.PASSIVE?.id === 'p2' && this.frame % 30 === 0) {
             this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + 1);
         }
@@ -155,9 +157,10 @@ export class GameEngine {
             if (this.dialogue.cooldown > 0) this.dialogue.cooldown--;
             if (this.dialogue.cooldown <= 0) {
                 const cost = GameConfig.UPGRADE_COST;
-                if (Input.keys['1'] && this.hero.spiritStones >= cost) { this.hero.spiritStones -= cost; this.hero.maxHp += 20; this.hero.hp += 20; this.dialogue.cooldown = 10; }
-                if (Input.keys['2'] && this.hero.spiritStones >= cost) { this.hero.spiritStones -= cost; this.hero.attack += 5; this.dialogue.cooldown = 10; }
-                if (Input.keys['3'] && this.hero.spiritStones >= cost) { this.hero.spiritStones -= cost; this.hero.defense += 2; this.dialogue.cooldown = 10; }
+                // ====== 【核心修复 3】太乙升级时，必须同时增加 base 永久属性 ======
+                if (Input.keys['1'] && this.hero.spiritStones >= cost) { this.hero.spiritStones -= cost; this.hero.baseMaxHp += 20; this.hero.maxHp += 20; this.hero.hp += 20; this.dialogue.cooldown = 10; }
+                if (Input.keys['2'] && this.hero.spiritStones >= cost) { this.hero.spiritStones -= cost; this.hero.baseAttack += 5; this.hero.attack += 5; this.dialogue.cooldown = 10; }
+                if (Input.keys['3'] && this.hero.spiritStones >= cost) { this.hero.spiritStones -= cost; this.hero.baseDefense += 2; this.hero.defense += 2; this.dialogue.cooldown = 10; }
                 if (Input.keys.f) { this.hero.state = 'NORMAL'; this.dialogue.cooldown = 15; }
             } return; 
         }
@@ -215,7 +218,8 @@ export class GameEngine {
             if (p.x < 0 || p.x > this.mapWidth || p.y < 0 || p.y > this.mapHeight) { this.enemyProjectiles.splice(i, 1); continue; }
             const distToHero = Math.sqrt(Math.pow(p.x - this.hero.x, 2) + Math.pow(p.y - this.hero.y, 2));
             if (distToHero < p.radius + this.hero.radius && this.hero.state !== 'DASHING' && this.hero.state !== 'REVIVING' && this.hero.state !== 'DEAD') {
-                const dmg = Math.max(1, p.damage - this.hero.defense); this.hero.hp -= dmg; this.hero.hitFlashTimer = 10; this.triggerHitStop(50); this.triggerScreenShake(150, 4); this.handleHeroDeath(); this.enemyProjectiles.splice(i, 1);
+                const dmg = Math.max(1, p.damage - this.hero.defense); this.hero.hp -= dmg; this.hero.hitFlashTimer = 10; this.triggerHitStop(50); this.triggerScreenShake(150, 4);
+                this.handleHeroDeath(); this.enemyProjectiles.splice(i, 1);
             }
         }
     }
@@ -232,7 +236,6 @@ export class GameEngine {
                 if (dist < 25 + enemy.radius) {
                     this.dealDamageToEnemy(enemy, p.damage);
                     enemy.hitFlashTimer = 8; p.hitEnemies.push(enemy.id);
-                    // ====== 【修改】取出攻击槽带的元素属性 ======
                     this.applyElementalStatus(enemy, p.damage, this.hero.boons.ATTACK?.element || 'NORMAL'); 
                     this.triggerHitStop(30);
                     if (p.bouncesLeft > 0) { p.bouncesLeft--; p.damage = Math.floor(p.damage * 0.7); let nextTarget = null; let minDist = Infinity; for (let e2 of this.enemies) { if (e2.hp > 0 && !p.hitEnemies.includes(e2.id)) { const d2 = Math.sqrt(Math.pow(p.x - e2.x, 2) + Math.pow(p.y - e2.y, 2)); if (d2 < minDist && d2 < 400) { minDist = d2; nextTarget = e2; } } } if (nextTarget) { const ndx = nextTarget.x - p.x; const ndy = nextTarget.y - p.y; const ndist = Math.sqrt(ndx*ndx + ndy*ndy); p.dirX = ndx / ndist; p.dirY = ndy / ndist; } else { p.state = 'RETURNING'; } } else { p.state = 'RETURNING'; } break; 
@@ -257,14 +260,12 @@ export class GameEngine {
     private updateHero() {
         if (this.hero.state === 'REVIVING') { this.hero.reviveTimer--; if (this.hero.reviveTimer <= 0) { this.hero.state = 'NORMAL'; this.hero.hitFlashTimer = 60; } return; }
 
-        // ====== 【新增提取】读取冲刺流派属性 ======
         let currentDashSpeed = 15; let currentDashCool = 40;
         const dBoon = this.hero.boons.DASH;
         if (dBoon?.id === 'd1') { currentDashSpeed = 18; currentDashCool = 30; }
         else if (dBoon?.id === 'd2') { currentDashSpeed = 25; }
         else if (dBoon?.id === 'd3') { currentDashCool = 20; }
 
-        // ====== 【新增提取】读取攻击流派属性 ======
         const aColor = this.hero.boons.ATTACK?.color || '#fbbf24';
         const aElement = this.hero.boons.ATTACK?.element || 'NORMAL';
 
@@ -278,15 +279,15 @@ export class GameEngine {
                 else if (this.hero.weapon === 'RING') { 
                     this.hero.attackTimer = 10; this.hero.attackCooldown = 30; const upg = this.hero.weaponUpgrades['RING'];
                     this.projectiles.push({ x: this.hero.x, y: this.hero.y, dirX: this.hero.dirX, dirY: this.hero.dirY, speed: upg ? 25 : 15, damage: this.hero.attack * (upg ? 1.2 : 1), bouncesLeft: this.hero.ringBounces + (upg ? 4 : 0), hitEnemies: [], state: 'FLYING', 
-                    color: aColor }); // 【修改】圈的颜色跟着普攻走
+                    color: aColor }); 
                 } 
                 else if (this.hero.weapon === 'SASH') { this.hero.attackTimer = 25; this.hero.attackCooldown = 25; } 
                 else if (this.hero.weapon === 'WHEELS') { this.hero.attackTimer = 20; this.hero.attackCooldown = 20; }
             } else if (Input.keys.space && this.hero.dashCooldown <= 0) { 
-                this.hero.state = 'DASHING'; this.hero.dashTimer = this.hero.dashDuration; this.hero.dashCooldown = currentDashCool; // 【修改】应用变异冲刺CD
+                this.hero.state = 'DASHING'; this.hero.dashTimer = this.hero.dashDuration; this.hero.dashCooldown = currentDashCool; 
             }
         } else if (this.hero.state === 'DASHING') {
-            this.hero.x += this.hero.dirX * currentDashSpeed; this.hero.y += this.hero.dirY * currentDashSpeed; // 【修改】应用变异冲刺速度
+            this.hero.x += this.hero.dirX * currentDashSpeed; this.hero.y += this.hero.dirY * currentDashSpeed; 
             this.hero.dashTimer--; if (this.hero.dashTimer <= 0) this.hero.state = 'NORMAL';
         } else if (this.hero.state === 'ATTACKING') {
             if (this.hero.weapon === 'SPEAR') {
@@ -341,7 +342,6 @@ export class GameEngine {
                 if (enemy.isBoss && enemy.name === '敖丙') { this.enemies.splice(i, 1); this.postDialogueAction = 'AOBING_DEAD'; this.startDialogue(GameConfig.DIALOGUES.AOBING_DEFEATED); continue; } 
                 else if (enemy.isBoss && enemy.name === '李靖') { this.enemies.splice(i, 1); this.postDialogueAction = 'LIJING_DEAD'; this.startDialogue(GameConfig.DIALOGUES.LIJING_DEFEATED); continue; }
                 
-                // ====== 【新增被动槽】殷夫人 慈母血阵 ======
                 if (!enemy.isBoss) { 
                     this.hero.spiritStones += Math.floor(Math.random() * (GameConfig.STONE_DROP_MAX - GameConfig.STONE_DROP_MIN + 1)) + GameConfig.STONE_DROP_MIN; 
                     if (this.hero.boons.PASSIVE?.id === 'p1' && Math.random() < 0.2) {
