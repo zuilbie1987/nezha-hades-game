@@ -1,65 +1,26 @@
 import type { Boon } from '../entities/Types';
 
 export class BoonSystem {
-    // 所有的神明赐福池
+    // 全新的槽位细分赐福池
     private static pool: Boon[] = [
-        {
-            id: 'b1', 
-            god: '魔童本源', 
-            name: '乾坤逆脉', 
-            description: '释放封印的三昧真火(燃烧)，生命上限永久增加30点。', 
-            color: '#ef4444',
-            apply: (hero) => { 
-                hero.maxHp += 30; 
-                hero.hp += 30; 
-                hero.boonColor = '#ef4444'; 
-                hero.element = 'FIRE'; // 赋予火焰元素（DoT流血）
-            }
-        },
-        {
-            id: 'b2', 
-            god: '敖丙', 
-            name: '冰霜龙甲', 
-            // 结合：水系龙族自带寒冰，附加减速，同时提升冲刺机动性
-            description: '攻击附带极寒煞气(减速)，获得龙族机动性，冲刺速度极大提升。', 
-            color: '#06b6d4',
-            apply: (hero) => { 
-                hero.dashSpeed += 15; 
-                hero.boonColor = '#06b6d4'; 
-                hero.element = 'ICE'; // 赋予冰冻元素（减速控制）
-            }
-        },
-        {
-            id: 'b3', 
-            god: '申公豹', 
-            name: '紫雷天降', 
-            // 结合：狂暴雷电劈向四周，附加连锁闪电，同时增加攻击范围
-            description: '攻击触发连锁闪电，狂暴雷力使突刺与弹射变得更远、更凶险。', 
-            color: '#8b5cf6',
-            apply: (hero) => { 
-                hero.attackThrustSpeed += 5; 
-                hero.boonColor = '#8b5cf6'; 
-                hero.element = 'THUNDER'; // 赋予雷电元素（群体弹射）
-            }
-        },
-        {
-            id: 'b4', 
-            god: '殷夫人', 
-            name: '慈母连心', 
-            description: '获得母亲跨越战场的坚强守护，血量瞬间恢复满状态，且保留武器元素。', 
-            color: '#10b981',
-            apply: (hero) => { 
-                hero.hp = hero.maxHp; 
-                hero.boonColor = '#10b981'; 
-                // 注意：这里故意不设置 hero.element，这样就不会洗掉玩家之前拿到的火/冰/雷元素！
-            }
-        }
+        // ====== 普攻槽 (ATTACK) ======
+        { id: 'a1', slot: 'ATTACK', element: 'FIRE', god: '魔童本源', name: '魔火普攻', description: '普攻附带魔童真火，使敌人陷入(燃烧)持续掉血。', color: '#ef4444' },
+        { id: 'a2', slot: 'ATTACK', element: 'ICE', god: '敖丙', name: '寒霜普攻', description: '普攻附带极寒煞气，使敌人(减速)50%。', color: '#06b6d4' },
+        { id: 'a3', slot: 'ATTACK', element: 'THUNDER', god: '申公豹', name: '狂雷普攻', description: '普攻触发(连锁闪电)，在敌人间疯狂弹射。', color: '#8b5cf6' },
+        
+        // ====== 冲刺槽 (DASH) ======
+        { id: 'd1', slot: 'DASH', god: '魔童本源', name: '风火冲刺', description: '冲刺距离变远，且冷却时间小幅缩短。', color: '#f97316' },
+        { id: 'd2', slot: 'DASH', god: '敖丙', name: '冰龙冲刺', description: '获得龙族机动性，冲刺速度极大提升。', color: '#38bdf8' },
+        { id: 'd3', slot: 'DASH', god: '申公豹', name: '闪电冲刺', description: '冲刺如闪电般频繁，冷却时间大幅缩短。', color: '#a855f7' },
+        
+        // ====== 被动槽 (PASSIVE) ======
+        { id: 'p1', slot: 'PASSIVE', god: '殷夫人', name: '慈母血阵', description: '每次击杀敌人时，有20%概率恢复 5 点生命。', color: '#10b981' },
+        { id: 'p2', slot: 'PASSIVE', god: '太乙真人', name: '造化青莲', description: '在战场上，每半秒自动恢复 1 点生命。', color: '#34d399' },
+        { id: 'p3', slot: 'PASSIVE', god: '申公豹', name: '豹子胆', description: '造成暴击时，附加 20 点真实伤害！', color: '#c084fc' }
     ];
 
     static generateBoons(count: number = 3): Boon[] {
-        // 洗牌算法随机抽取赐福
         const shuffled = [...this.pool].sort(() => 0.5 - Math.random());
-        // 如果池子数量不足 count，会自动返回最大数量
         return shuffled.slice(0, count);
     }
 }

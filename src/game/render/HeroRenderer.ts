@@ -1,7 +1,6 @@
 import type { Projectile } from '../entities/Types';
 
 export class HeroRenderer {
-    // 【修改】抽离本体渲染
     static drawHero(rc: any, ctx: CanvasRenderingContext2D, hero: any, frame: number) {
         if (hero.state === 'DEAD') {
             const deathOpts = { roughness: 4, stroke: '#6b7280', strokeWidth: 2 };
@@ -14,6 +13,10 @@ export class HeroRenderer {
         const isHit = hero.hitFlashTimer > 0;
         const colors = { red: isHit ? '#fef2f2' : '#dc2626', gold: isHit ? '#fef3c7' : '#fbbf24', skin: isHit ? '#ffedd5' : '#fed7aa', hair: isHit ? '#6b7280' : '#1f2937' };
 
+        // ====== 【修改】分离普攻颜色和冲刺颜色 ======
+        const attackColor = hero.boons.ATTACK?.color || '#fbbf24';
+        const dashColor = hero.boons.DASH?.color || '#3b82f6';
+
         if (hero.state === 'NORMAL') {
             const breath = Math.sin(frame * 0.1) * 3;
             const rOpts = { roughness: isHit ? 3 : 1.5 }; 
@@ -21,7 +24,7 @@ export class HeroRenderer {
             if (hero.weapon === 'SPEAR') {
                 const spearY = hero.y - 30 + breath;
                 rc.line(hero.x - 80, spearY + 20, hero.x + 80, spearY - 25, { stroke: '#6b7280', strokeWidth: 5, ...rOpts });
-            } else if (hero.weapon === 'RING' && hero.attackCooldown <= 10) { // 简单判断手里是否有圈
+            } else if (hero.weapon === 'RING' && hero.attackCooldown <= 10) { 
                 rc.circle(hero.x + 40, hero.y, 25, { stroke: colors.gold, strokeWidth: 4, ...rOpts });
             } else if (hero.weapon === 'SASH') {
                 const sashWave = Math.sin(frame * 0.05) * 10;
@@ -52,8 +55,9 @@ export class HeroRenderer {
             ctx.save();
             ctx.translate(hero.x, hero.y);
             ctx.rotate(Math.atan2(hero.dirY, hero.dirX));
-            rc.line(-150, 0, -50, 0, { stroke: hero.boonColor, strokeWidth: 5, roughness: 3 });
-            rc.polygon([[-40, -30], [50, 0], [-40, 30]], { fill: colors.red, fillStyle: 'hachure', hachureGap: 3, roughness: 3, stroke: hero.boonColor });
+            // 【修改】冲刺使用 dashColor
+            rc.line(-150, 0, -50, 0, { stroke: dashColor, strokeWidth: 5, roughness: 3 });
+            rc.polygon([[-40, -30], [50, 0], [-40, 30]], { fill: colors.red, fillStyle: 'hachure', hachureGap: 3, roughness: 3, stroke: dashColor });
             ctx.restore();
         } 
         else if (hero.state === 'ATTACKING') {
@@ -61,11 +65,12 @@ export class HeroRenderer {
             ctx.translate(hero.x, hero.y);
             ctx.rotate(Math.atan2(hero.dirY, hero.dirX));
             
+            // 【修改】攻击使用 attackColor
             if (hero.weapon === 'SPEAR') {
                 rc.line(30, -30, 160, -10, { stroke: colors.red, roughness: 3, strokeWidth: 2, bowing: 2 });
-                rc.line(40, 30, 150, 10, { stroke: hero.boonColor, roughness: 3, strokeWidth: 2, bowing: 2 });
+                rc.line(40, 30, 150, 10, { stroke: attackColor, roughness: 3, strokeWidth: 2, bowing: 2 });
                 rc.line(-50, 0, 100, 0, { stroke: '#6b7280', strokeWidth: 6, roughness: 1 });
-                rc.polygon([[100, -15], [160, 0], [100, 15]], { fill: hero.boonColor, fillStyle: 'solid' });
+                rc.polygon([[100, -15], [160, 0], [100, 15]], { fill: attackColor, fillStyle: 'solid' });
             } else if (hero.weapon === 'RING') {
                 rc.ellipse(10, 0, 60, 50, { fill: colors.skin, fillStyle: 'solid', roughness: 1.5 });
                 rc.line(-20, 0, 40, 0, { stroke: colors.red, strokeWidth: 8, roughness: 2 });
@@ -84,12 +89,12 @@ export class HeroRenderer {
         }
     }
 
-    // 【新增】抽离乾坤圈渲染
     static drawProjectiles(rc: any, ctx: CanvasRenderingContext2D, projectiles: Projectile[], frame: number) {
         for (const p of projectiles) {
             ctx.save();
             ctx.translate(p.x, p.y);
             ctx.rotate(frame * 0.2); 
+            // 【修补】飞盘颜色也使用传入的 color
             rc.circle(0, 0, 30, { stroke: p.color, strokeWidth: 5, roughness: 1.5 });
             rc.circle(0, 0, 20, { stroke: '#fef3c7', strokeWidth: 2, roughness: 1 });
             rc.curve([[0, 15], [-p.dirX * 30, 20], [-p.dirX * 50, 5]], { stroke: '#dc2626', strokeWidth: 3, roughness: 3 });

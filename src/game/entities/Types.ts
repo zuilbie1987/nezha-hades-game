@@ -27,15 +27,17 @@ export interface Enemy {
 }
 export interface DialogueLine { speaker: string; text: string; color: string; }
 
+// ====== 【新增】定义赐福槽位类型 ======
+export type BoonSlot = 'ATTACK' | 'DASH' | 'PASSIVE';
 // --- 新增：神明赐福数据结构 ---
 export interface Boon {
     id: string;
-    god: string;       // 神明名称
-    name: string;      // 赐福技能名
-    description: string; // 效果描述
-    color: string;     // 神明代表色（太乙蓝、申公豹紫等）
-    // apply 函数：当玩家选择该赐福时，直接修改主角的属性
-    apply: (hero: any) => void; 
+    god: string;       
+    name: string;      
+    description: string; 
+    color: string;     
+    slot: BoonSlot;         // 【新增】标记该赐福属于哪个槽位
+    element?: ElementType;  // 【新增】标记该赐福附带的异常元素
 }
 
 // --- 新增：地形障碍物 ---
