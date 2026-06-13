@@ -42,15 +42,14 @@ export class RoomGenerator {
         }
     }
 
-    // 【修改】加入 currentLevel 参数
     static spawnRewardDoors(mapWidth: number, mapHeight: number, obstacles: Obstacle[], currentLevel: number): Door[] {
-        // ====== 【核心修复】改为 >= 4，确保任何情况到达关底都会刷出首领门 ======
         if (currentLevel >= 4) {
             return [{ x: mapWidth / 2, y: 150, radius: 50, rewardType: 'BOSS' }];
         }
 
         const doors: Door[] = [];
-        const allRewards: RewardType[] = ['BOON', 'HEAL', 'GOLD', 'MAX_HP', 'HAMMER'];
+        // ====== 【修改】将 SHOP 加入随机门池子 ======
+        const allRewards: RewardType[] = ['BOON', 'HEAL', 'GOLD', 'MAX_HP', 'HAMMER', 'SHOP'];
         const shuffled = allRewards.sort(() => 0.5 - Math.random());
         const selectedRewards = [shuffled[0], shuffled[1]];
 

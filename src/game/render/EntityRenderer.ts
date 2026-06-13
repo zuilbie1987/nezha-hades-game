@@ -309,6 +309,35 @@ export class EntityRenderer {
         }
     }
 
+    // ====== 【新增】黑市商人申公豹 ======
+    static drawShenGongBao(rc: any, ctx: CanvasRenderingContext2D, hero: any, npc: any, interacted: boolean, dialogueActive: boolean, frame: number) {
+        ctx.save();
+        ctx.translate(npc.x, npc.y);
+        const float = Math.sin(frame * 0.05) * 5;
+        
+        // 黑紫色神秘斗篷
+        rc.polygon([[-30, -10 + float], [30, -10 + float], [40, -80 + float], [-40, -80 + float]], { fill: '#3b0764', fillStyle: 'hachure', roughness: 2, stroke: '#581c87', strokeWidth: 2 });
+        // 苍白的瘦长脸
+        rc.ellipse(0, -90 + float, 30, 45, { fill: '#f3f4f6', fillStyle: 'solid', stroke: '#1f2937', strokeWidth: 2 });
+        // 狡诈的青色眼睛
+        rc.line(-10, -95 + float, -5, -90 + float, { stroke: '#2dd4bf', strokeWidth: 3 });
+        rc.line(10, -95 + float, 5, -90 + float, { stroke: '#2dd4bf', strokeWidth: 3 });
+        // 豹子尖耳
+        rc.polygon([[-15, -110 + float], [-25, -130 + float], [-5, -110 + float]], { fill: '#3b0764', fillStyle: 'solid', stroke: 'none' });
+        rc.polygon([[15, -110 + float], [25, -130 + float], [5, -110 + float]], { fill: '#3b0764', fillStyle: 'solid', stroke: 'none' });
+
+        ctx.restore();
+
+        if (!interacted && !dialogueActive) {
+            const dist = Math.sqrt(Math.pow(hero.x - npc.x, 2) + Math.pow(hero.y - npc.y, 2));
+            if (dist < 150) {
+                ctx.fillStyle = '#1f2937';
+                ctx.font = 'bold 16px "Comic Sans MS", cursive, sans-serif';
+                ctx.fillText('[按 F 开启黑市交易]', npc.x - 75, npc.y - 150);
+            }
+        }
+    }
+
     // ====== 【新增】渲染伤害飘字与暴击特效 ======
     static drawDamageTexts(ctx: CanvasRenderingContext2D, texts: any[]) {
         ctx.save();

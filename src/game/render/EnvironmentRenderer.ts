@@ -57,8 +57,9 @@ export class EnvironmentRenderer {
                 case 'GOLD': doorColor = '#eab308'; iconText = '🪙'; label = '龙宫秘宝'; break;
                 case 'MAX_HP': doorColor = '#ef4444'; iconText = '🍖'; label = '蟠桃灵根'; break;
                 case 'HAMMER': doorColor = '#6b7280'; iconText = '🔨'; label = '神兵重铸'; break;
-                // ====== 【新增】首领大门视觉 ======
                 case 'BOSS': doorColor = '#b91c1c'; iconText = '☠'; label = '首领挑战'; break;
+                // ====== 【新增】黑市商店大门视觉 ======
+                case 'SHOP': doorColor = '#9333ea'; iconText = '🛍️'; label = '黑市商人'; break;
             }
             rc.ellipse(0, 0, door.radius*2, door.radius*2, { stroke: doorColor, strokeWidth: 4, roughness: 3, bowing: 2 });
             rc.ellipse(0, 0, door.radius*1.5, door.radius*1.5, { stroke: doorColor, strokeWidth: 2, roughness: 2 });

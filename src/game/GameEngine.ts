@@ -6,6 +6,7 @@ import { GameHUD } from './ui/GameHUD';
 import { BoonSystem } from './systems/BoonSystem';
 import { BoonUI } from './ui/BoonUI';
 import { UpgradeUI } from './ui/UpgradeUI';
+import { ShopUI } from './ui/ShopUI'; // 【新增】引入新建的商店界面
 
 import { HeroRenderer } from './render/HeroRenderer';
 import { EntityRenderer } from './render/EntityRenderer';
@@ -29,7 +30,6 @@ export class GameEngine {
     private hero = { 
         x: 800, y: 600, speed: 5, radius: 25,
         hp: 100, maxHp: 100, attack: 15, defense: 0, spiritStones: 0, gold: 0, 
-        // ====== 【新增】初始天生附带 15% 的暴击率 ======
         critRate: 0.15, 
         state: 'NORMAL', dirX: 1, dirY: 0,
         dashTimer: 0, dashDuration: 8, dashSpeed: 15, dashCooldown: 0,
@@ -43,8 +43,6 @@ export class GameEngine {
     private projectiles: Projectile[] = []; 
     private enemyProjectiles: EnemyProjectile[] = []; 
     private lightnings: { x1: number, y1: number, x2: number, y2: number, duration: number }[] = [];
-    
-    // ====== 【新增】存放在屏幕上飘动的数字 ======
     private damageTexts: DamageText[] = []; 
 
     private npcLiJing = { x: 800, y: 220, radius: 40 };       
@@ -52,11 +50,15 @@ export class GameEngine {
     private npcTaiyi = { x: 1250, y: 480, radius: 50 };       
     private homeLotusPool = { x: 1250, y: 720, radius: 50 };  
     private homePortal = { x: 800, y: 950, radius: 40, active: false }; 
-    
     private lotusPool = { x: 800, y: 600, radius: 80, used: false };
     
-    private currentNpcType: 'AOGUANG' | 'PIG' | 'BEASTS' | null = null;
+    // ====== 【修改】支持申公豹 NPC ======
+    private currentNpcType: 'AOGUANG' | 'PIG' | 'BEASTS' | 'SHENGONGBAO' | null = null;
     private rewardNpcEntity = { x: 800, y: 400, radius: 60, interacted: false };
+    
+    // ====== 【新增】记录商店里的三个物品是否已经被购买 ======
+    private shopStock = [true, true, true];
+
     private postDialogueAction: 'AOBING_DEAD' | 'LIJING_DEAD' | null = null;
     private dialogue = { active: false, index: 0, lines: [] as DialogueLine[], cooldown: 0 };
     private mapWidth = 1600; private mapHeight = 1200;
@@ -76,25 +78,12 @@ export class GameEngine {
     private triggerHitStop(ms: number) { this.hitStopTimer = ms; }
     private triggerScreenShake(ms: number, mag: number) { this.shakeTimer = ms; this.shakeMagnitude = mag; }
 
-    // ====== 【核心新增】统一的伤害结算通道 ======
     private dealDamageToEnemy(enemy: Enemy, baseDamage: number, canCrit: boolean = true) {
-        // 判定暴击
         const isCrit = canCrit && (Math.random() < this.hero.critRate);
         const finalDamage = Math.floor(isCrit ? baseDamage * 2 : baseDamage);
-        
         enemy.hp -= finalDamage;
-        
-        // 实例化飘字对象（带有一些随机的初始物理抛物线速度）
-        const tx = enemy.x + (Math.random() - 0.5) * 40;
-        const ty = enemy.y - enemy.radius - Math.random() * 20;
-        this.damageTexts.push({
-            x: tx, y: ty, 
-            value: finalDamage, isCrit,
-            life: 45, maxLife: 45,
-            vx: (Math.random() - 0.5) * 2, 
-            vy: -1.5 - Math.random() * 1.5 
-        });
-        
+        const tx = enemy.x + (Math.random() - 0.5) * 40; const ty = enemy.y - enemy.radius - Math.random() * 20;
+        this.damageTexts.push({ x: tx, y: ty, value: finalDamage, isCrit, life: 45, maxLife: 45, vx: (Math.random() - 0.5) * 2, vy: -1.5 - Math.random() * 1.5 });
         return finalDamage;
     }
 
@@ -107,7 +96,6 @@ export class GameEngine {
                 if (other.id === targetEnemy.id || other.hp <= 0) continue;
                 const dist = Math.sqrt(Math.pow(targetEnemy.x - other.x, 2) + Math.pow(targetEnemy.y - other.y, 2));
                 if (dist < 300) { 
-                    // 【修改】闪电连锁也走统一扣血，且不参与暴击计算以免过强
                     this.dealDamageToEnemy(other, baseDamage * 0.6, false);
                     other.hitFlashTimer = 6;
                     this.lightnings.push({ x1: targetEnemy.x, y1: targetEnemy.y, x2: other.x, y2: other.y, duration: 8 });
@@ -131,21 +119,22 @@ export class GameEngine {
         this.hero.currentRevives = this.hero.maxRevives; this.hero.gold = 0;
         this.hero.weaponUpgrades = { 'RING': false, 'SASH': false, 'SPEAR': false, 'WHEELS': false };
         this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.enemies = []; this.obstacles = []; this.doors = []; this.roomCleared = false;
-        
-        // 【新增】清空屏幕遗留飘字
         this.damageTexts = [];
-        
         this.currentLevel = 1; this.currentScene = 'HOME'; this.hero.x = 800; this.hero.y = 600; this.homePortal.active = false; this.dialogue.active = false;
         if (this.storyPhase === 0 && this.taiyiDefeatCount > 0) { this.storyPhase = 1; }
     }
 
     private startDialogue(lines: DialogueLine[]) { this.dialogue.active = true; this.dialogue.index = 0; this.dialogue.lines = lines; this.dialogue.cooldown = 15; this.hero.state = 'NORMAL'; }
 
-    private transitionToNPC(npcType: 'AOGUANG' | 'PIG' | 'BEASTS') {
+    private transitionToNPC(npcType: 'AOGUANG' | 'PIG' | 'BEASTS' | 'SHENGONGBAO') {
         this.currentScene = 'NPC_ROOM'; this.currentNpcType = npcType; this.rewardNpcEntity.interacted = false;
         this.hero.x = this.mapWidth / 2; this.hero.y = this.mapHeight - 150;
         this.rewardNpcEntity.x = this.mapWidth / 2; this.rewardNpcEntity.y = this.mapHeight / 2 - 100;
         this.doors = []; this.obstacles = []; this.enemies = []; this.projectiles = []; this.enemyProjectiles = []; this.lightnings = []; this.damageTexts = []; this.currentLevel++;
+        // ====== 【新增】进货：每次见申公豹时补满库存 ======
+        if (npcType === 'SHENGONGBAO') {
+            this.shopStock = [true, true, true];
+        }
     }
 
     private transitionToBattle(rewardType: RewardType) {
@@ -175,12 +164,8 @@ export class GameEngine {
         this.frame++;
         for (let i = this.lightnings.length - 1; i >= 0; i--) { this.lightnings[i].duration--; if (this.lightnings[i].duration <= 0) this.lightnings.splice(i, 1); }
 
-        // ====== 【新增】处理所有伤害文字的漂浮生命周期 ======
         for (let i = this.damageTexts.length - 1; i >= 0; i--) {
-            const dt = this.damageTexts[i];
-            dt.x += dt.vx;
-            dt.y += dt.vy;
-            dt.life--;
+            const dt = this.damageTexts[i]; dt.x += dt.vx; dt.y += dt.vy; dt.life--;
             if (dt.life <= 0) this.damageTexts.splice(i, 1);
         }
 
@@ -205,6 +190,40 @@ export class GameEngine {
             return; 
         }
 
+        // ====== 【新增】处理商店购物按键逻辑 ======
+        if (this.hero.state === 'SHOPPING') {
+            if (this.dialogue.cooldown > 0) this.dialogue.cooldown--;
+            if (this.dialogue.cooldown <= 0) {
+                // 1. 盲盒
+                if (Input.keys['1'] && this.shopStock[0] && this.hero.gold >= 150) {
+                    this.hero.gold -= 150; this.shopStock[0] = false;
+                    const boon = BoonSystem.generateBoons(1)[0]; boon.apply(this.hero);
+                    this.dialogue.cooldown = 15;
+                }
+                // 2. 血包
+                if (Input.keys['2'] && this.shopStock[1] && this.hero.gold >= 50) {
+                    this.hero.gold -= 50; this.shopStock[1] = false;
+                    this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + 50);
+                    this.dialogue.cooldown = 15;
+                }
+                // 3. 邪术契约 (血统减半，送150金币)
+                if (Input.keys['3'] && this.shopStock[2]) {
+                    this.shopStock[2] = false;
+                    this.hero.maxHp = Math.max(1, Math.floor(this.hero.maxHp / 2));
+                    if (this.hero.hp > this.hero.maxHp) this.hero.hp = this.hero.maxHp;
+                    this.hero.gold += 150;
+                    this.dialogue.cooldown = 15;
+                    this.triggerScreenShake(200, 5); // 扣血震撼感
+                }
+                // 离开
+                if (Input.keys.f) {
+                    this.hero.state = 'NORMAL'; this.dialogue.cooldown = 15;
+                    this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, [], this.currentLevel);
+                }
+            }
+            return; 
+        }
+
         if (this.dialogue.cooldown > 0) this.dialogue.cooldown--;
         if (this.dialogue.active) {
             if (Input.keys.f && this.dialogue.cooldown <= 0) {
@@ -220,7 +239,13 @@ export class GameEngine {
                         if (this.currentNpcType === 'AOGUANG') this.hero.gold += 150;
                         else if (this.currentNpcType === 'PIG') { this.hero.maxHp += 25; this.hero.hp += 25; }
                         else if (this.currentNpcType === 'BEASTS') { this.hero.weaponUpgrades[this.hero.weapon] = true; }
-                        this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, [], this.currentLevel);
+                        
+                        // ====== 【修改】若是申公豹，对话结束直接拉起购物界面 ======
+                        if (this.currentNpcType === 'SHENGONGBAO') {
+                            this.hero.state = 'SHOPPING';
+                        } else {
+                            this.doors = RoomGenerator.spawnRewardDoors(this.mapWidth, this.mapHeight, [], this.currentLevel);
+                        }
                     }
                 }
             }
@@ -255,6 +280,8 @@ export class GameEngine {
                 if (this.currentNpcType === 'AOGUANG') this.startDialogue(GameConfig.DIALOGUES.NPC_AOGUANG);
                 else if (this.currentNpcType === 'PIG') this.startDialogue(GameConfig.DIALOGUES.NPC_PIG);
                 else if (this.currentNpcType === 'BEASTS') this.startDialogue(GameConfig.DIALOGUES.NPC_BEASTS);
+                // ====== 【修改】触发申公豹对话 ======
+                else if (this.currentNpcType === 'SHENGONGBAO') this.startDialogue(GameConfig.DIALOGUES.NPC_SHENGONGBAO);
             }
             this.checkDoors();
         }
@@ -294,7 +321,6 @@ export class GameEngine {
                 if (enemy.hp <= 0 || p.hitEnemies.includes(enemy.id)) continue;
                 const dist = Math.sqrt(Math.pow(p.x - enemy.x, 2) + Math.pow(p.y - enemy.y, 2));
                 if (dist < 25 + enemy.radius) {
-                    // ====== 【修改】乾坤圈走统一伤害结算 ======
                     this.dealDamageToEnemy(enemy, p.damage);
                     enemy.hitFlashTimer = 8; p.hitEnemies.push(enemy.id);
                     this.applyElementalStatus(enemy, p.damage); this.triggerHitStop(30);
@@ -318,6 +344,8 @@ export class GameEngine {
                 else if (door.rewardType === 'GOLD') this.transitionToNPC('AOGUANG');
                 else if (door.rewardType === 'MAX_HP') this.transitionToNPC('PIG');
                 else if (door.rewardType === 'HAMMER') this.transitionToNPC('BEASTS');
+                // ====== 【新增】点击商店门跳转 ======
+                else if (door.rewardType === 'SHOP') this.transitionToNPC('SHENGONGBAO');
                 else this.transitionToBattle(door.rewardType); 
                 break; 
             }
@@ -375,7 +403,6 @@ export class GameEngine {
                     const hitboxX = this.hero.x + this.hero.dirX * 80; const hitboxY = this.hero.y + this.hero.dirY * 80; let hitAny = false;
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; const dist = Math.sqrt(Math.pow(enemy.x - hitboxX, 2) + Math.pow(enemy.y - hitboxY, 2));
-                        // ====== 【修改】长枪突刺走统一伤害结算 ======
                         if (dist < (upg ? 80 : 50) + enemy.radius) { 
                             this.dealDamageToEnemy(enemy, this.hero.attack * (upg ? 1.5 : 1)); 
                             enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 20; enemy.y += this.hero.dirY * 20; this.applyElementalStatus(enemy, this.hero.attack); hitAny = true; 
@@ -388,7 +415,6 @@ export class GameEngine {
                     const upg = this.hero.weaponUpgrades['SASH']; let hitAny = false;
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; const dx = enemy.x - this.hero.x; const dy = enemy.y - this.hero.y; const dist = Math.sqrt(dx*dx + dy*dy);
-                        // ====== 【修改】混天绫走统一伤害结算 ======
                         if (dist < (upg ? 250 : 150) + enemy.radius) { 
                             this.dealDamageToEnemy(enemy, this.hero.attack * (upg ? 1.5 : 0.8)); 
                             enemy.hitFlashTimer = 8; enemy.x += this.hero.dirX * 40; enemy.y += this.hero.dirY * 40; this.applyElementalStatus(enemy, this.hero.attack * (upg ? 1.5 : 0.8)); hitAny = true; 
@@ -405,7 +431,6 @@ export class GameEngine {
                 if (!this.hero.hasDealtDamage) {
                     for (let enemy of this.enemies) {
                         if (enemy.hp <= 0) continue; const dist = Math.sqrt(Math.pow(enemy.x - this.hero.x, 2) + Math.pow(enemy.y - this.hero.y, 2));
-                        // ====== 【修改】风火轮走统一伤害结算 ======
                         if (dist < 60 + enemy.radius) { 
                             this.dealDamageToEnemy(enemy, this.hero.attack * (upg ? 0.6 : 0.4)); 
                             enemy.hitFlashTimer = 5; this.applyElementalStatus(enemy, this.hero.attack * 0.4); this.triggerScreenShake(50, 2); 
@@ -435,7 +460,6 @@ export class GameEngine {
             const enemy = this.enemies[i];
             if (enemy.hitFlashTimer > 0) enemy.hitFlashTimer--; if (enemy.attackCooldown > 0) enemy.attackCooldown--;
 
-            // ====== 【修改】让火系异常的灼烧也能不断飘字 (并且不能触发暴击套娃) ======
             if (enemy.burnTimer && enemy.burnTimer > 0) { 
                 enemy.burnTimer--; 
                 if (this.frame % 30 === 0) { 
@@ -550,6 +574,8 @@ export class GameEngine {
                 if (this.currentNpcType === 'AOGUANG') EntityRenderer.drawAoGuang(this.rc, this.ctx, this.hero, item.obj, item.obj.interacted, this.dialogue.active, this.frame);
                 else if (this.currentNpcType === 'PIG') EntityRenderer.drawFlyingPig(this.rc, this.ctx, this.hero, item.obj, item.obj.interacted, this.dialogue.active, this.frame);
                 else if (this.currentNpcType === 'BEASTS') EntityRenderer.drawBarrierBeasts(this.rc, this.ctx, this.hero, item.obj, item.obj.interacted, this.dialogue.active, this.frame);
+                // ====== 【新增】渲染狡诈的申公豹 ======
+                else if (this.currentNpcType === 'SHENGONGBAO') EntityRenderer.drawShenGongBao(this.rc, this.ctx, this.hero, item.obj, item.obj.interacted, this.dialogue.active, this.frame);
             }
         }
 
@@ -567,7 +593,6 @@ export class GameEngine {
         }
         HeroRenderer.drawProjectiles(this.rc, this.ctx, this.projectiles, this.frame); 
 
-        // ====== 【新增】渲染位于顶层的伤害数字飘字 ======
         EntityRenderer.drawDamageTexts(this.ctx, this.damageTexts);
 
         this.ctx.restore();
@@ -575,6 +600,8 @@ export class GameEngine {
         GameHUD.draw(this.rc, this.ctx, this.hero, this.currentScene); DialogueUI.draw(this.rc, this.ctx, this.frame, this.dialogue);
         if (this.hero.state === 'BOON_SELECTION') BoonUI.draw(this.rc, this.ctx, this.currentBoons);
         if (this.hero.state === 'UPGRADING') UpgradeUI.draw(this.rc, this.ctx, this.hero);
+        // ====== 【新增】渲染黑市购物 UI ======
+        if (this.hero.state === 'SHOPPING') ShopUI.draw(this.rc, this.ctx, this.hero, this.shopStock);
     }
 
     private gameLoop = (timestamp: number) => {

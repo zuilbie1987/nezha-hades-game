@@ -81,6 +81,13 @@ export const GameConfig = {
             { speaker: '右结界兽', text: '你瞎啊！这是小少爷！快把锤子拿来，帮少爷把法宝敲一敲！', color: '#d97706' },
             { speaker: '哪吒', text: '你们两个蠢货轻点敲！别把小爷的本命法宝给砸碎了！', color: '#dc2626' },
             { speaker: '系统', text: '（神兵重铸！你当前手持的武器发生了史诗级变异！）', color: '#6b7280' }
+        ] as DialogueLine[],
+
+        // ====== 【新增】申公豹黑市对话 ======
+        NPC_SHENGONGBAO: [
+            { speaker: '黑影', text: '嘿嘿嘿...师兄太乙不给你的好东西，我这里都有...只要你出得起价钱...', color: '#9333ea' },
+            { speaker: '哪吒', text: '申公豹？你这结巴怎么在这偷偷摸摸的？', color: '#dc2626' },
+            { speaker: '申公豹', text: '嘘！黑...黑市交易！不买别捣乱！', color: '#9333ea' }
         ] as DialogueLine[]
     }
 };
