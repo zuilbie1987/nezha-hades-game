@@ -1,24 +1,22 @@
-// 口琴渲染与交互控制器
 class HarmonicaController {
   holeCount = 10;
-  activeTouch = null;
+  activeTouches = new Map(); // 改用Map存储多根手指独立触摸
   slideThreshold = 18;
   maxPitchShift = 160;
   blowRowEl = document.getElementById('blowRow');
   drawRowEl = document.getElementById('drawRow');
 
-  // 每孔技巧配置：super超吹 / bend压音 / none无进阶
   holeSkillMap = [
-    { blow:"super", blowSteps:2, draw:"bend", drawSteps:1 }, // 1孔
-    { blow:"none", blowSteps:0, draw:"bend", drawSteps:2 }, // 2孔 双阶压音
-    { blow:"none", blowSteps:0, draw:"bend", drawSteps:3 }, // 3孔 三阶压音
-    { blow:"none", blowSteps:0, draw:"bend", drawSteps:1 }, // 4孔
-    { blow:"none", blowSteps:0, draw:"none", drawSteps:0 }, // 5孔 无进阶
-    { blow:"none", blowSteps:0, draw:"bend", drawSteps:1 }, // 6孔
-    { blow:"super", blowSteps:2, draw:"none", drawSteps:0 }, //7
-    { blow:"super", blowSteps:2, draw:"none", drawSteps:0 }, //8
-    { blow:"super", blowSteps:2, draw:"none", drawSteps:0 }, //9
-    { blow:"super", blowSteps:3, draw:"none", drawSteps:0 }, //10
+    { blow:"super", blowSteps:2, draw:"bend", drawSteps:1 },
+    { blow:"none", blowSteps:0, draw:"bend", drawSteps:2 },
+    { blow:"none", blowSteps:0, draw:"bend", drawSteps:3 },
+    { blow:"none", blowSteps:0, draw:"bend", drawSteps:1 },
+    { blow:"none", blowSteps:0, draw:"none", drawSteps:0 },
+    { blow:"none", blowSteps:0, draw:"bend", drawSteps:1 },
+    { blow:"super", blowSteps:2, draw:"none", drawSteps:0 },
+    { blow:"super", blowSteps:2, draw:"none", drawSteps:0 },
+    { blow:"super", blowSteps:2, draw:"none", drawSteps:0 },
+    { blow:"super", blowSteps:3, draw:"none", drawSteps:0 },
   ];
 
   constructor() {
@@ -32,6 +30,10 @@ class HarmonicaController {
     const skill = this.holeSkillMap[num-1];
     const steps = type === "blow" ? skill.blowSteps : skill.drawSteps;
     const skillType = type === "blow" ? skill.blow : skill.draw;
+
+    // 新增：给支持技巧的孔添加高亮外框class
+    if(skillType === 'super') wrap.classList.add('super-frame');
+    if(skillType === 'bend') wrap.classList.add('bend-frame');
 
     const ruler = document.createElement('div');
     ruler.className = 'scale-ruler';
@@ -80,37 +82,39 @@ class HarmonicaController {
     const wrapDom = document.getElementById('harmonicaWrap');
     new UnifiedInput(
       wrapDom,
-      (x, y, target) => this.handleStart(x, y, target),
-      (x, y) => this.handleMove(x, y),
-      () => this.handleEnd()
+      (touchId, x, y, target) => this.handleStart(touchId, x, y, target),
+      (touchId, x, y) => this.handleMove(touchId, x, y),
+      (touchId) => this.handleEnd(touchId)
     );
   }
 
-  handleStart(x, y, originTarget) {
+  handleStart(touchId, x, y, originTarget) {
     const btn = originTarget.closest('.hole-btn');
     if (!btn) return;
     const hole = Number(btn.dataset.hole);
     const type = btn.dataset.type;
-    const baseFreq = type === 'blow' 
-      ? audioEngine.BLOW_FREQS[hole - 1] 
+    const baseFreq = type === 'blow'
+      ? audioEngine.BLOW_FREQS[hole - 1]
       : audioEngine.DRAW_FREQS[hole - 1];
 
-    this.activeTouch = {
+    const touchData = {
       btn, hole, type, baseFreq,
       startY: y,
       player: audioEngine.playNote(baseFreq, 0)
     };
+    this.activeTouches.set(touchId, touchData);
   }
 
-  handleMove(x, y) {
-    if (!this.activeTouch) return;
-    const deltaY = y - this.activeTouch.startY;
-    const { btn, type, baseFreq, player } = this.activeTouch;
+  handleMove(touchId, x, y) {
+    const touchData = this.activeTouches.get(touchId);
+    if (!touchData) return;
+    const deltaY = y - touchData.startY;
+    const { btn, type, baseFreq, player } = touchData;
     const progressBar = btn.querySelector('.slide-progress');
 
     let pitchOffset = 0;
     let slidePercent = 0;
-    const skill = this.holeSkillMap[this.activeTouch.hole - 1];
+    const skill = this.holeSkillMap[touchData.hole - 1];
     const maxStep = type === "blow" ? skill.blowSteps : skill.drawSteps;
 
     if(maxStep === 0) {
@@ -134,10 +138,11 @@ class HarmonicaController {
     progressBar.style.height = `${slidePercent * 100}%`;
   }
 
-  handleEnd() {
-    if (!this.activeTouch) return;
-    audioEngine.stopNote(this.activeTouch.player);
-    this.activeTouch.btn.querySelector('.slide-progress').style.height = '0%';
-    this.activeTouch = null;
+  handleEnd(touchId) {
+    const touchData = this.activeTouches.get(touchId);
+    if (!touchData) return;
+    audioEngine.stopNote(touchData.player);
+    touchData.btn.querySelector('.slide-progress').style.height = '0%';
+    this.activeTouches.delete(touchId);
   }
 }

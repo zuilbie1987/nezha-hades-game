@@ -1,4 +1,3 @@
-// 统一输入控制器：兼容移动端Touch + PC鼠标
 class UnifiedInput {
   constructor(wrapEl, onStart, onMove, onEnd) {
     this.wrap = wrapEl;
@@ -12,40 +11,59 @@ class UnifiedInput {
   bindTouch() {
     this.wrap.addEventListener('touchstart', e => {
       e.preventDefault();
-      const t = e.touches[0];
-      this.onStart(t.clientX, t.clientY, e.target);
+      for (let i = 0; i < e.touches.length; i++) {
+        const t = e.touches[i];
+        this.onStart(t.identifier, t.clientX, t.clientY, e.target);
+      }
     }, { passive:false });
+
     this.wrap.addEventListener('touchmove', e => {
       e.preventDefault();
-      const t = e.touches[0];
-      this.onMove(t.clientX, t.clientY);
+      for (let i = 0; i < e.touches.length; i++) {
+        const t = e.touches[i];
+        this.onMove(t.identifier, t.clientX, t.clientY);
+      }
     }, { passive:false });
-    this.wrap.addEventListener('touchend', () => this.onEnd());
-    this.wrap.addEventListener('touchcancel', () => this.onEnd());
+
+    this.wrap.addEventListener('touchend', e => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        this.onEnd(t.identifier);
+      }
+    });
+
+    this.wrap.addEventListener('touchcancel', e => {
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        this.onEnd(t.identifier);
+      }
+    });
   }
 
   bindMouse() {
     let mouseDown = false;
-    let targetEl = null;
+    const mouseId = 'mouse-0';
 
     this.wrap.addEventListener('mousedown', e => {
       mouseDown = true;
-      targetEl = e.target;
-      this.onStart(e.clientX, e.clientY, targetEl);
+      this.onStart(mouseId, e.clientX, e.clientY, e.target);
     });
+
     window.addEventListener('mousemove', e => {
       if (!mouseDown) return;
-      this.onMove(e.clientX, e.clientY);
+      this.onMove(mouseId, e.clientX, e.clientY);
     });
+
     window.addEventListener('mouseup', () => {
       if (!mouseDown) return;
       mouseDown = false;
-      this.onEnd();
+      this.onEnd(mouseId);
     });
+
     window.addEventListener('mouseleave', () => {
       if (!mouseDown) return;
       mouseDown = false;
-      this.onEnd();
+      this.onEnd(mouseId);
     });
   }
 }

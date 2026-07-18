@@ -12,7 +12,6 @@ html, body {
   font-family: system-ui, -apple-system, sans-serif;
   padding: 16px 0;
 }
-/* 消除移动端300ms延迟 + 鼠标拖拽优化 */
 .harmonica-shell {
   touch-action: manipulation;
   user-select: none;
@@ -48,8 +47,6 @@ header {
   margin: 0 auto;
   padding: 0 12px;
 }
-
-/* ========== 口琴外壳整体样式（特色琴体框架） ========== */
 .harmonica-shell {
   background: linear-gradient(145deg, #78350f, #451a03);
   border-radius: 22px;
@@ -75,7 +72,28 @@ header {
 .harmonica-shell::before { left: 4px; }
 .harmonica-shell::after { right: 4px; }
 
+/* 新增：行容器+左右侧边文字 */
+.row-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+.row-side-label {
+  font-size: 12px;
+  width: 60px;
+  text-align: center;
+  font-weight: bold;
+}
+.blow-label {
+  color: #60a5fa;
+}
+.draw-label {
+  color: #c084fc;
+}
+
 .row {
+  flex: 1;
   display: flex;
   gap: 4px;
   margin: 10px 0;
@@ -91,7 +109,6 @@ header {
   padding: 10px 6px;
   border-radius: 10px;
 }
-
 .hole-wrap {
   flex: 1;
   display: flex;
@@ -99,6 +116,18 @@ header {
   align-items: center;
   gap: 4px;
   position: relative;
+  padding: 4px;
+  border-radius: 8px;
+}
+/* 新增：可超吹外框（吹气孔） */
+.hole-wrap.super-frame {
+  border: 2px solid #3b82f6;
+  box-shadow: 0 0 6px #3b82f680;
+}
+/* 新增：可压音外框（吸气孔） */
+.hole-wrap.bend-frame {
+  border: 2px solid #a855f7;
+  box-shadow: 0 0 6px #a855f780;
 }
 .hole-btn {
   width: 100%;
@@ -116,7 +145,6 @@ header {
 }
 .blow-btn { background: #1d4ed8; }
 .draw-btn { background: #9333ea; }
-
 .slide-progress {
   position: absolute;
   left: 0;
@@ -126,11 +154,8 @@ header {
 }
 .blow-btn .slide-progress { bottom: 0; height: 0%; }
 .draw-btn .slide-progress { top: 0; height: 0%; }
-
 .hole-label { z-index: 2; font-size:15px; }
 .skill-tag { font-size: 10px; opacity:0.8; margin-top:2px; }
-
-/* ========== 压音/超吹滑动刻度标尺 ========== */
 .scale-ruler {
   width: 100%;
   height: 40px;
@@ -157,7 +182,6 @@ header {
   color:#ddd;
   white-space: nowrap;
 }
-
 footer {
   margin-top: 40px;
   text-align: center;
