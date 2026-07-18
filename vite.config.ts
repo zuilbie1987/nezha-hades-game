@@ -4,6 +4,12 @@ export default defineConfig({
   root: './',
   build: {
     outDir: 'dist',
+    rollupOptions: {
+      input: {
+        main: './index.html',
+        harmonica: './harmonica.html',
+      },
+    },
   },
   server: {
     host: true, // 相当于 host: '0.0.0.0'
