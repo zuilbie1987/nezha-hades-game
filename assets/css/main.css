@@ -1,0 +1,167 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html, body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: #121212;
+  color: #fff;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding: 16px 0;
+}
+/* 消除移动端300ms延迟 + 鼠标拖拽优化 */
+.harmonica-shell {
+  touch-action: manipulation;
+  user-select: none;
+}
+header {
+  padding: 16px;
+  text-align: center;
+}
+.tips {
+  font-size: 14px;
+  color: #aaa;
+  margin-top: 8px;
+  line-height: 1.6;
+}
+.desktop-tip {
+  color: #93c5fd;
+  font-size: 13px;
+  margin-top:4px;
+}
+.audio-lock {
+  margin: 20px auto;
+  padding: 14px 32px;
+  font-size: 16px;
+  background: #2563eb;
+  border: none;
+  color: white;
+  border-radius: 99px;
+  cursor: pointer;
+}
+.container {
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 12px;
+}
+
+/* ========== 口琴外壳整体样式（特色琴体框架） ========== */
+.harmonica-shell {
+  background: linear-gradient(145deg, #78350f, #451a03);
+  border-radius: 22px;
+  padding: 24px 14px;
+  box-shadow:
+    0 0 0 6px #b45309,
+    0 0 0 10px #d4a066,
+    inset 0 0 40px rgba(0,0,0,0.4),
+    0 12px 30px rgba(0,0,0,0.6);
+  position: relative;
+}
+.harmonica-shell::before,
+.harmonica-shell::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 80%;
+  background: linear-gradient(90deg,#9ca3af,#e5e7eb,#9ca3af);
+  border-radius: 4px;
+}
+.harmonica-shell::before { left: 4px; }
+.harmonica-shell::after { right: 4px; }
+
+.row {
+  display: flex;
+  gap: 4px;
+  margin: 10px 0;
+  position: relative;
+}
+.row-blow {
+  background: rgba(37, 99, 235, 0.18);
+  padding: 10px 6px;
+  border-radius: 10px;
+}
+.row-draw {
+  background: rgba(168, 85, 247, 0.18);
+  padding: 10px 6px;
+  border-radius: 10px;
+}
+
+.hole-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+.hole-btn {
+  width: 100%;
+  height: 62px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  cursor: pointer;
+}
+.blow-btn { background: #1d4ed8; }
+.draw-btn { background: #9333ea; }
+
+.slide-progress {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  background: rgba(255,255,255,0.4);
+  transition: none;
+}
+.blow-btn .slide-progress { bottom: 0; height: 0%; }
+.draw-btn .slide-progress { top: 0; height: 0%; }
+
+.hole-label { z-index: 2; font-size:15px; }
+.skill-tag { font-size: 10px; opacity:0.8; margin-top:2px; }
+
+/* ========== 压音/超吹滑动刻度标尺 ========== */
+.scale-ruler {
+  width: 100%;
+  height: 40px;
+  position: relative;
+  border-left: 1px dashed rgba(255,255,255,0.3);
+  border-right: 1px dashed rgba(255,255,255,0.3);
+}
+.row-blow .scale-ruler { order: -1; }
+.row-draw .scale-ruler { order: 2; }
+.tick {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  background: rgba(255,255,255,0.6);
+}
+.tick-half { height:8px; }
+.tick-whole { height:14px; }
+.tick-label {
+  position: absolute;
+  left:50%;
+  transform: translateX(-50%);
+  font-size:9px;
+  color:#ddd;
+  white-space: nowrap;
+}
+
+footer {
+  margin-top: 40px;
+  text-align: center;
+  font-size: 12px;
+  color: #666;
+  padding: 10px;
+}
