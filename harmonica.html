@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>在线十孔布鲁斯口琴模拟器 | 触屏鼠标双支持 压音超吹刻度可视化</title>
+  <meta name="description" content="同时支持手机触屏与电脑鼠标滑动操作的十孔布鲁斯口琴模拟器，带完整口琴外壳，每孔可视化压音、超吹滑动刻度，标准C调Richter音阶">
+  <meta name="keywords" content="十孔口琴模拟器,布鲁斯口琴在线练习,口琴压音超吹可视化,电脑鼠标口琴模拟器,标准C调十孔口琴">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      min-height: 100vh;
+      overflow-x: hidden;
+      background: #121212;
+      color: #fff;
+      font-family: system-ui, -apple-system, sans-serif;
+      padding: 16px 0;
+    }
+    /* 消除移动端300ms延迟 + 鼠标拖拽优化 */
+    .harmonica-shell {
+      touch-action: manipulation;
+      user-select: none;
+    }
+    header {
+      padding: 16px;
+      text-align: center;
+    }
+    .tips {
+      font-size: 14px;
+      color: #aaa;
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+    .desktop-tip {
+      color: #93c5fd;
+      font-size: 13px;
+      margin-top:4px;
+    }
+    .audio-lock {
+      margin: 20px auto;
+      padding: 14px 32px;
+      font-size: 16px;
+      background: #2563eb;
+      border: none;
+      color: white;
+      border-radius: 99px;
+      cursor: pointer;
+    }
+    .container {
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 12px;
+    }
+
+    /* ========== 口琴外壳整体样式（特色琴体框架） ========== */
+    .harmonica-shell {
+      background: linear-gradient(145deg, #78350f, #451a03);
+      border-radius: 22px;
+      padding: 24px 14px;
+      box-shadow:
+        0 0 0 6px #b45309,
+        0 0 0 10px #d4a066,
+        inset 0 0 40px rgba(0,0,0,0.4),
+        0 12px 30px rgba(0,0,0,0.6);
+      position: relative;
+    }
+    .harmonica-shell::before,
+    .harmonica-shell::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 10px;
+      height: 80%;
+      background: linear-gradient(90deg,#9ca3af,#e5e7eb,#9ca3af);
+      border-radius: 4px;
+    }
+    .harmonica-shell::before { left: 4px; }
+    .harmonica-shell::after { right: 4px; }
+
+    .row {
+      display: flex;
+      gap: 4px;
+      margin: 10px 0;
+      position: relative;
+    }
+    .row-blow {
+      background: rgba(37, 99, 235, 0.18);
+      padding: 10px 6px;
+      border-radius: 10px;
+    }
+    .row-draw {
+      background: rgba(168, 85, 247, 0.18);
+      padding: 10px 6px;
+      border-radius: 10px;
+    }
+
+    .hole-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      position: relative;
+    }
+    .hole-btn {
+      width: 100%;
+      height: 62px;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      font-size: 13px;
+      font-weight: 500;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .blow-btn { background: #1d4ed8; }
+    .draw-btn { background: #9333ea; }
+
+    .slide-progress {
+      position: absolute;
+      left: 0;
+      width: 100%;
+      background: rgba(255,255,255,0.4);
+      transition: none;
+    }
+    .blow-btn .slide-progress { bottom: 0; height: 0%; }
+    .draw-btn .slide-progress { top: 0; height: 0%; }
+
+    .hole-label { z-index: 2; font-size:15px; }
+    .skill-tag { font-size: 10px; opacity:0.8; margin-top:2px; }
+
+    /* ========== 压音/超吹滑动刻度标尺 ========== */
+    .scale-ruler {
+      width: 100%;
+      height: 40px;
+      position: relative;
+      border-left: 1px dashed rgba(255,255,255,0.3);
+      border-right: 1px dashed rgba(255,255,255,0.3);
+    }
+    .row-blow .scale-ruler { order: -1; }
+    .row-draw .scale-ruler { order: 2; }
+    .tick {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1px;
+      background: rgba(255,255,255,0.6);
+    }
+    .tick-half { height:8px; }
+    .tick-whole { height:14px; }
+    .tick-label {
+      position: absolute;
+      left:50%;
+      transform: translateX(-50%);
+      font-size:9px;
+      color:#ddd;
+      white-space: nowrap;
+    }
+
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>十孔布鲁斯口琴模拟器（标准C调Richter音阶）</h1>
+  <p class="tips">
+    上排蓝色【吹气】按住向上滑动=超吹<br>
+    下排紫色【吸气】按住向下滑动=压音
+  </p>
+  <p class="desktop-tip">💻 Mac/PC开发测试：支持鼠标按住拖拽滑动</p>
+  <button id="unlockAudio" class="audio-lock">点击开启音频引擎</button>
+</header>
+
+<div class="container">
+  <div class="harmonica-shell" id="harmonicaWrap">
+    <div class="row row-blow" id="blowRow"></div>
+    <div class="row row-draw" id="drawRow"></div>
+  </div>
+</div>
+
+<footer>
+  标准C调十孔布鲁斯Richter调式 · 吹吸音独立音高 · 本地浏览器内存运行
+</footer>
+
+<script>
+// ====================== 1. 全局音频引擎（修复：拆分吹/吸两套基准频率） ======================
+class AudioEngine {
+  static instance = null;
+  ctx = null;
+  // 标准C调十孔 1~10孔 吹气频率
+  BLOW_FREQS = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98, 2093.00];
+  // 标准C调十孔 1~10孔 吸气频率
+  DRAW_FREQS = [293.66, 392.00, 466.16, 587.33, 698.46, 880.00, 932.33, 1174.66, 1396.91, 1760.00];
+
+  constructor() {
+    if (AudioEngine.instance) return AudioEngine.instance;
+    AudioEngine.instance = this;
+  }
+
+  unlock() {
+    if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+  }
+
+  playNote(baseFreq, pitchOffset = 0) {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.22;
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(baseFreq + pitchOffset, this.ctx.currentTime);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    return { osc, gain };
+  }
+
+  updatePitch(player, baseFreq, offset) {
+    player.osc.frequency.linearRampToValueAtTime(
+      baseFreq + offset,
+      this.ctx.currentTime + 0.012
+    );
+  }
+
+  stopNote(player) {
+    player.gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.04);
+    setTimeout(() => player.osc.stop(), 60);
+  }
+}
+const audioEngine = new AudioEngine();
+
+// ====================== 2. 输入统一管理器：Touch + 鼠标双兼容 ======================
+class UnifiedInput {
+  constructor(wrapEl, onStart, onMove, onEnd) {
+    this.wrap = wrapEl;
+    this.onStart = onStart;
+    this.onMove = onMove;
+    this.onEnd = onEnd;
+    this.bindTouch();
+    this.bindMouse();
+  }
+
+  bindTouch() {
+    this.wrap.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      this.onStart(t.clientX, t.clientY, e.target);
+    }, { passive:false });
+    this.wrap.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const t = e.touches[0];
+      this.onMove(t.clientX, t.clientY);
+    }, { passive:false });
+    this.wrap.addEventListener('touchend', () => this.onEnd());
+    this.wrap.addEventListener('touchcancel', () => this.onEnd());
+  }
+
+  bindMouse() {
+    let mouseDown = false;
+    let originX = 0, originY = 0;
+    let targetEl = null;
+
+    this.wrap.addEventListener('mousedown', e => {
+      mouseDown = true;
+      originX = e.clientX;
+      originY = e.clientY;
+      targetEl = e.target;
+      this.onStart(e.clientX, e.clientY, targetEl);
+    });
+    window.addEventListener('mousemove', e => {
+      if (!mouseDown) return;
+      this.onMove(e.clientX, e.clientY);
+    });
+    window.addEventListener('mouseup', () => {
+      if (!mouseDown) return;
+      mouseDown = false;
+      this.onEnd();
+    });
+    window.addEventListener('mouseleave', () => {
+      if (!mouseDown) return;
+      mouseDown = false;
+      this.onEnd();
+    });
+  }
+}
+
+// ====================== 3. 口琴控制器：修复取音逻辑，区分吹吸独立频率 ======================
+class HarmonicaController {
+  holeCount = 10;
+  activeTouch = null;
+  slideThreshold = 18;
+  maxPitchShift = 160;
+  blowRowEl = document.getElementById('blowRow');
+  drawRowEl = document.getElementById('drawRow');
+
+  // 每孔技巧配置：super超吹 / bend压音 / none无进阶
+  holeSkillMap = [
+    { blow:"super", blowSteps:2, draw:"bend", drawSteps:1 }, // 1孔
+    { blow:"none", blowSteps:0, draw:"bend", drawSteps:2 }, // 2孔 双阶压音
+    { blow:"none", blowSteps:0, draw:"bend", drawSteps:3 }, // 3孔 三阶压音
+    { blow:"none", blowSteps:0, draw:"bend", drawSteps:1 }, // 4孔
+    { blow:"none", blowSteps:0, draw:"none", drawSteps:0 }, // 5孔 无进阶
+    { blow:"none", blowSteps:0, draw:"bend", drawSteps:1 }, // 6孔
+    { blow:"super", blowSteps:2, draw:"none", drawSteps:0 }, //7
+    { blow:"super", blowSteps:2, draw:"none", drawSteps:0 }, //8
+    { blow:"super", blowSteps:2, draw:"none", drawSteps:0 }, //9
+    { blow:"super", blowSteps:3, draw:"none", drawSteps:0 }, //10
+  ];
+
+  constructor() {
+    this.renderAllHoles();
+    this.bindUnifiedInput();
+  }
+
+  createHoleWrap(num, type) {
+    const wrap = document.createElement('div');
+    wrap.className = 'hole-wrap';
+    const skill = this.holeSkillMap[num-1];
+    const steps = type === "blow" ? skill.blowSteps : skill.drawSteps;
+    const skillType = type === "blow" ? skill.blow : skill.draw;
+
+    const ruler = document.createElement('div');
+    ruler.className = 'scale-ruler';
+    for(let i=0; i<=steps; i++){
+      const tick = document.createElement('div');
+      const percent = i / steps;
+      tick.style.top = `${percent * 100}%`;
+      tick.className = i === steps ? "tick tick-whole" : "tick tick-half";
+      ruler.appendChild(tick);
+      if(i>0){
+        const label = document.createElement('div');
+        label.className = "tick-label";
+        label.style.top = `${percent * 100}%`;
+        label.textContent = `${i}半音`;
+        ruler.appendChild(label);
+      }
+    }
+    wrap.appendChild(ruler);
+
+    const btn = document.createElement('div');
+    btn.className = `hole-btn ${type}-btn`;
+    btn.dataset.hole = num;
+    btn.dataset.type = type;
+    let skillText = "";
+    if(skillType === "super") skillText = "可超吹";
+    if(skillType === "bend") skillText = "可压音";
+    btn.innerHTML = `
+      <div class="slide-progress"></div>
+      <span class="hole-label">${num}</span>
+      <span class="skill-tag">${skillText}</span>
+    `;
+    wrap.appendChild(btn);
+    return wrap;
+  }
+
+  renderAllHoles() {
+    for(let i=1; i<=this.holeCount; i++){
+      const blowWrap = this.createHoleWrap(i, "blow");
+      this.blowRowEl.appendChild(blowWrap);
+      const drawWrap = this.createHoleWrap(i, "draw");
+      this.drawRowEl.appendChild(drawWrap);
+    }
+  }
+
+  bindUnifiedInput() {
+    const wrapDom = document.getElementById('harmonicaWrap');
+    new UnifiedInput(
+      wrapDom,
+      (x, y, target) => this.handleStart(x, y, target),
+      (x, y) => this.handleMove(x, y),
+      () => this.handleEnd()
+    );
+  }
+
+  handleStart(x, y, originTarget) {
+    const btn = originTarget.closest('.hole-btn');
+    if (!btn) return;
+    const hole = Number(btn.dataset.hole);
+    const type = btn.dataset.type;
+    // 修复核心：根据吹/吸取独立基准频率
+    const baseFreq = type === 'blow' 
+      ? audioEngine.BLOW_FREQS[hole - 1] 
+      : audioEngine.DRAW_FREQS[hole - 1];
+
+    this.activeTouch = {
+      btn, hole, type, baseFreq,
+      startY: y,
+      player: audioEngine.playNote(baseFreq, 0)
+    };
+  }
+
+  handleMove(x, y) {
+    if (!this.activeTouch) return;
+    const deltaY = y - this.activeTouch.startY;
+    const { btn, type, baseFreq, player } = this.activeTouch;
+    const progressBar = btn.querySelector('.slide-progress');
+
+    let pitchOffset = 0;
+    let slidePercent = 0;
+    const skill = this.holeSkillMap[this.activeTouch.hole - 1];
+    const maxStep = type === "blow" ? skill.blowSteps : skill.drawSteps;
+
+    if(maxStep === 0) {
+      pitchOffset = 0;
+      slidePercent = 0;
+    }else if (type === 'blow') {
+      if (deltaY < -this.slideThreshold) {
+        const rawPercent = Math.min(Math.abs(deltaY) / 100, 1);
+        slidePercent = rawPercent;
+        pitchOffset = this.maxPitchShift * slidePercent;
+      }
+    } else {
+      if (deltaY > this.slideThreshold) {
+        const rawPercent = Math.min(deltaY / 100, 1);
+        slidePercent = rawPercent;
+        pitchOffset = -this.maxPitchShift * slidePercent;
+      }
+    }
+
+    audioEngine.updatePitch(player, baseFreq, pitchOffset);
+    progressBar.style.height = `${slidePercent * 100}%`;
+  }
+
+  handleEnd() {
+    if (!this.activeTouch) return;
+    audioEngine.stopNote(this.activeTouch.player);
+    this.activeTouch.btn.querySelector('.slide-progress').style.height = '0%';
+    this.activeTouch = null;
+  }
+}
+
+// ====================== 页面初始化入口 ======================
+window.addEventListener('DOMContentLoaded', () => {
+  const unlockBtn = document.getElementById('unlockAudio');
+  let harmonica = null;
+
+  unlockBtn.addEventListener('click', () => {
+    audioEngine.unlock();
+    unlockBtn.style.display = 'none';
+    harmonica = new HarmonicaController();
+  });
+});
+</script>
+</body>
+</html>
