@@ -1,10 +1,8 @@
 class HarmonicaController {
   holeCount = 10;
-  activeTouches = new Map(); // 改用Map存储多根手指独立触摸
-  slideThreshold = 18;
-  maxPitchShift = 160;
-  blowRowEl = document.getElementById('blowRow');
-  drawRowEl = document.getElementById('drawRow');
+  activeTouches = new Map();
+  gridEl = document.getElementById('keyboardGrid');
+  pixelsPerSemitone = 45; // 滑动多少像素改变一个半音
 
   holeSkillMap = [
     { blow:"super", blowSteps:2, draw:"bend", drawSteps:1 },
@@ -20,129 +18,142 @@ class HarmonicaController {
   ];
 
   constructor() {
-    this.renderAllHoles();
+    this.renderKeyboard();
     this.bindUnifiedInput();
   }
 
-  createHoleWrap(num, type) {
-    const wrap = document.createElement('div');
-    wrap.className = 'hole-wrap';
-    const skill = this.holeSkillMap[num-1];
-    const steps = type === "blow" ? skill.blowSteps : skill.drawSteps;
-    const skillType = type === "blow" ? skill.blow : skill.draw;
+  renderKeyboard() {
+    this.gridEl.innerHTML = '';
+    
+    for (let i = 1; i <= this.holeCount; i++) {
+      const col = document.createElement('div');
+      col.className = 'hole-col';
+      col.dataset.colHole = i;
+      const skill = this.holeSkillMap[i - 1];
 
-    // 新增：给支持技巧的孔添加高亮外框class
-    if(skillType === 'super') wrap.classList.add('super-frame');
-    if(skillType === 'bend') wrap.classList.add('bend-frame');
-
-    const ruler = document.createElement('div');
-    ruler.className = 'scale-ruler';
-    for(let i=0; i<=steps; i++){
-      const tick = document.createElement('div');
-      const percent = i / steps;
-      tick.style.top = `${percent * 100}%`;
-      tick.className = i === steps ? "tick tick-whole" : "tick tick-half";
-      ruler.appendChild(tick);
-      if(i>0){
-        const label = document.createElement('div');
-        label.className = "tick-label";
-        label.style.top = `${percent * 100}%`;
-        label.textContent = `${i}半音`;
-        ruler.appendChild(label);
+      // 槽位 0-2: 超吹 (最多3个，从上到下 +3, +2, +1)
+      for (let step = 3; step >= 1; step--) {
+        if (skill.blow === 'super' && step <= skill.blowSteps) {
+          col.appendChild(this.createButton(i, 'blow', step, '超吹'));
+        } else {
+          col.appendChild(this.createSpacer());
+        }
       }
-    }
-    wrap.appendChild(ruler);
 
-    const btn = document.createElement('div');
-    btn.className = `hole-btn ${type}-btn`;
-    btn.dataset.hole = num;
-    btn.dataset.type = type;
-    let skillText = "";
-    if(skillType === "super") skillText = "可超吹";
-    if(skillType === "bend") skillText = "可压音";
-    btn.innerHTML = `
-      <div class="slide-progress"></div>
-      <span class="hole-label">${num}</span>
-      <span class="skill-tag">${skillText}</span>
-    `;
-    wrap.appendChild(btn);
-    return wrap;
+      // 槽位 3: 吹气
+      col.appendChild(this.createButton(i, 'blow', 0, '吹'));
+      // 槽位 4: 吸气
+      col.appendChild(this.createButton(i, 'draw', 0, '吸'));
+
+      // 槽位 5-7: 压音 (最多3个，从上到下 -1, -2, -3)
+      for (let step = 1; step <= 3; step++) {
+        if (skill.draw === 'bend' && step <= skill.drawSteps) {
+          col.appendChild(this.createButton(i, 'draw', -step, '压音'));
+        } else {
+          col.appendChild(this.createSpacer());
+        }
+      }
+      this.gridEl.appendChild(col);
+    }
   }
 
-  renderAllHoles() {
-    for(let i=1; i<=this.holeCount; i++){
-      const blowWrap = this.createHoleWrap(i, "blow");
-      this.blowRowEl.appendChild(blowWrap);
-      const drawWrap = this.createHoleWrap(i, "draw");
-      this.drawRowEl.appendChild(drawWrap);
-    }
+  createSpacer() {
+    const spacer = document.createElement('div');
+    spacer.className = 'note-spacer';
+    return spacer;
+  }
+
+  createButton(hole, type, semitones, label) {
+    const btn = document.createElement('div');
+    const isBase = semitones === 0;
+    btn.className = `note-btn ${type} ${isBase ? 'base' : 'skill'}`;
+    btn.dataset.hole = hole;
+    btn.dataset.type = type;
+    btn.dataset.semitones = semitones;
+    
+    let text = isBase ? hole : Math.abs(semitones);
+    btn.innerHTML = `${text}<div class="note-sub">${label}</div>`;
+    return btn;
   }
 
   bindUnifiedInput() {
     const wrapDom = document.getElementById('harmonicaWrap');
     new UnifiedInput(
       wrapDom,
-      (touchId, x, y, target) => this.handleStart(touchId, x, y, target),
-      (touchId, x, y) => this.handleMove(touchId, x, y),
+      (touchId, x, y, target) => this.handleStart(touchId, y, target),
+      (touchId, x, y) => this.handleMove(touchId, y),
       (touchId) => this.handleEnd(touchId)
     );
   }
 
-  handleStart(touchId, x, y, originTarget) {
-    const btn = originTarget.closest('.hole-btn');
+  handleStart(touchId, y, originTarget) {
+    const btn = originTarget.closest('.note-btn');
     if (!btn) return;
+    
     const hole = Number(btn.dataset.hole);
     const type = btn.dataset.type;
-    const baseFreq = type === 'blow'
-      ? audioEngine.BLOW_FREQS[hole - 1]
+    const originSemitones = Number(btn.dataset.semitones);
+
+    const baseFreq = type === 'blow' 
+      ? audioEngine.BLOW_FREQS[hole - 1] 
       : audioEngine.DRAW_FREQS[hole - 1];
 
+    btn.classList.add('active');
+
     const touchData = {
-      btn, hole, type, baseFreq,
+      hole, type, baseFreq, originSemitones,
       startY: y,
-      player: audioEngine.playNote(baseFreq, 0)
+      colEl: btn.closest('.hole-col'),
+      player: audioEngine.playNote(baseFreq, originSemitones)
     };
     this.activeTouches.set(touchId, touchData);
   }
 
-  handleMove(touchId, x, y) {
+  handleMove(touchId, y) {
     const touchData = this.activeTouches.get(touchId);
     if (!touchData) return;
-    const deltaY = y - touchData.startY;
-    const { btn, type, baseFreq, player } = touchData;
-    const progressBar = btn.querySelector('.slide-progress');
 
-    let pitchOffset = 0;
-    let slidePercent = 0;
-    const skill = this.holeSkillMap[touchData.hole - 1];
-    const maxStep = type === "blow" ? skill.blowSteps : skill.drawSteps;
+    const { startY, originSemitones, type, hole, baseFreq, player, colEl } = touchData;
+    const deltaY = y - startY;
 
-    if(maxStep === 0) {
-      pitchOffset = 0;
-      slidePercent = 0;
-    }else if (type === 'blow') {
-      if (deltaY < -this.slideThreshold) {
-        const rawPercent = Math.min(Math.abs(deltaY) / 100, 1);
-        slidePercent = rawPercent;
-        pitchOffset = this.maxPitchShift * slidePercent;
-      }
+    // 滑动方向统一：向上滑动 deltaY为负数，向下滑动 deltaY为正数。
+    let shift = -deltaY / this.pixelsPerSemitone;
+    let currentSemitones = originSemitones + shift;
+
+    // 获取当前孔位的物理极限，限制滑动极值(Clamp)
+    const skill = this.holeSkillMap[hole - 1];
+    const maxSuper = skill.blow === 'super' ? skill.blowSteps : 0;
+    const maxBend = skill.draw === 'bend' ? skill.drawSteps : 0;
+
+    if (type === 'blow') {
+      currentSemitones = Math.max(0, Math.min(currentSemitones, maxSuper));
     } else {
-      if (deltaY > this.slideThreshold) {
-        const rawPercent = Math.min(deltaY / 100, 1);
-        slidePercent = rawPercent;
-        pitchOffset = -this.maxPitchShift * slidePercent;
-      }
+      currentSemitones = Math.max(-maxBend, Math.min(currentSemitones, 0));
     }
 
-    audioEngine.updatePitch(player, baseFreq, pitchOffset);
-    progressBar.style.height = `${slidePercent * 100}%`;
+    // 1. 发送平滑频率给音频引擎
+    audioEngine.updatePitch(player, baseFreq, currentSemitones);
+
+    // 2. 视觉反馈：点亮滑动到达的最接近的整数方块
+    const nearestIntSemitone = Math.round(currentSemitones);
+    const buttons = colEl.querySelectorAll(`.note-btn[data-type="${type}"]`);
+    
+    buttons.forEach(b => {
+      if (Number(b.dataset.semitones) === nearestIntSemitone) {
+        b.classList.add('active');
+      } else {
+        b.classList.remove('active');
+      }
+    });
   }
 
   handleEnd(touchId) {
     const touchData = this.activeTouches.get(touchId);
     if (!touchData) return;
+    
     audioEngine.stopNote(touchData.player);
-    touchData.btn.querySelector('.slide-progress').style.height = '0%';
+    // 移除该列所有的 active 状态
+    touchData.colEl.querySelectorAll('.note-btn').forEach(b => b.classList.remove('active'));
     this.activeTouches.delete(touchId);
   }
 }

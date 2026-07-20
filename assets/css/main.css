@@ -12,25 +12,18 @@ html, body {
   font-family: system-ui, -apple-system, sans-serif;
   padding: 16px 0;
 }
-.harmonica-shell {
-  touch-action: manipulation;
-  user-select: none;
-}
 header {
   padding: 16px;
   text-align: center;
 }
+h1 { font-size: 20px; }
 .tips {
-  font-size: 14px;
+  font-size: 13px;
   color: #aaa;
   margin-top: 8px;
   line-height: 1.6;
 }
-.desktop-tip {
-  color: #93c5fd;
-  font-size: 13px;
-  margin-top:4px;
-}
+.desktop-tip { color: #93c5fd; font-size: 12px; margin-top:4px; }
 .audio-lock {
   margin: 20px auto;
   padding: 14px 32px;
@@ -43,20 +36,23 @@ header {
 }
 .container {
   width: 100%;
-  max-width: 720px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 0 12px;
+  padding: 0 10px;
 }
 .harmonica-shell {
   background: linear-gradient(145deg, #78350f, #451a03);
   border-radius: 22px;
-  padding: 24px 14px;
+  padding: 24px 12px;
   box-shadow:
     0 0 0 6px #b45309,
     0 0 0 10px #d4a066,
     inset 0 0 40px rgba(0,0,0,0.4),
     0 12px 30px rgba(0,0,0,0.6);
   position: relative;
+  /* 屏蔽浏览器默认手势，保证滑动滑音不触发页面滚动 */
+  touch-action: none; 
+  user-select: none;
 }
 .harmonica-shell::before,
 .harmonica-shell::after {
@@ -64,7 +60,7 @@ header {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  width: 10px;
+  width: 8px;
   height: 80%;
   background: linear-gradient(90deg,#9ca3af,#e5e7eb,#9ca3af);
   border-radius: 4px;
@@ -72,115 +68,63 @@ header {
 .harmonica-shell::before { left: 4px; }
 .harmonica-shell::after { right: 4px; }
 
-/* 新增：行容器+左右侧边文字 */
-.row-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0;
-}
-.row-side-label {
-  font-size: 12px;
-  width: 60px;
-  text-align: center;
-  font-weight: bold;
-}
-.blow-label {
-  color: #60a5fa;
-}
-.draw-label {
-  color: #c084fc;
-}
-
-.row {
-  flex: 1;
-  display: flex;
+/* --- 矩阵键盘布局 --- */
+.keyboard-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
   gap: 4px;
-  margin: 10px 0;
-  position: relative;
+  width: 100%;
 }
-.row-blow {
-  background: rgba(37, 99, 235, 0.18);
-  padding: 10px 6px;
-  border-radius: 10px;
-}
-.row-draw {
-  background: rgba(168, 85, 247, 0.18);
-  padding: 10px 6px;
-  border-radius: 10px;
-}
-.hole-wrap {
-  flex: 1;
+.hole-col {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 4px;
-  position: relative;
-  padding: 4px;
-  border-radius: 8px;
 }
-/* 新增：可超吹外框（吹气孔） */
-.hole-wrap.super-frame {
-  border: 2px solid #3b82f6;
-  box-shadow: 0 0 6px #3b82f680;
-}
-/* 新增：可压音外框（吸气孔） */
-.hole-wrap.bend-frame {
-  border: 2px solid #a855f7;
-  box-shadow: 0 0 6px #a855f780;
-}
-.hole-btn {
+/* 统一的音符按钮样式 */
+.note-btn {
   width: 100%;
-  height: 62px;
-  border-radius: 8px;
+  aspect-ratio: 4 / 5; 
+  border-radius: 6px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  position: relative;
-  font-size: 13px;
-  font-weight: 500;
-  overflow: hidden;
+  font-size: 14px;
+  font-weight: bold;
   cursor: pointer;
-}
-.blow-btn { background: #1d4ed8; }
-.draw-btn { background: #9333ea; }
-.slide-progress {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  background: rgba(255,255,255,0.4);
-  transition: none;
-}
-.blow-btn .slide-progress { bottom: 0; height: 0%; }
-.draw-btn .slide-progress { top: 0; height: 0%; }
-.hole-label { z-index: 2; font-size:15px; }
-.skill-tag { font-size: 10px; opacity:0.8; margin-top:2px; }
-.scale-ruler {
-  width: 100%;
-  height: 40px;
   position: relative;
-  border-left: 1px dashed rgba(255,255,255,0.3);
-  border-right: 1px dashed rgba(255,255,255,0.3);
+  transition: transform 0.1s, filter 0.1s, background-color 0.1s;
+  box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.3);
 }
-.row-blow .scale-ruler { order: -1; }
-.row-draw .scale-ruler { order: 2; }
-.tick {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 1px;
-  background: rgba(255,255,255,0.6);
+.note-btn.active {
+  transform: scale(0.92);
+  filter: brightness(1.4);
 }
-.tick-half { height:8px; }
-.tick-whole { height:14px; }
-.tick-label {
-  position: absolute;
-  left:50%;
-  transform: translateX(-50%);
-  font-size:9px;
-  color:#ddd;
-  white-space: nowrap;
+/* 空白占位符 */
+.note-spacer {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  visibility: hidden;
+}
+/* 基础音颜色 */
+.note-btn.blow { background: #2563eb; color: #fff; }
+.note-btn.draw { background: #9333ea; color: #fff; }
+/* 技巧音(压音/超吹)弱化 */
+.note-btn.skill {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.note-btn.blow.skill { background: #1e3a8a; border: 1px solid #3b82f6; }
+.note-btn.draw.skill { background: #4c1d95; border: 1px solid #a855f7; }
+/* 技巧方块被滑动滑过时的点亮状态 */
+.note-btn.blow.skill.active { background: #3b82f6; }
+.note-btn.draw.skill.active { background: #a855f7; }
+
+/* 按钮内的小标签 */
+.note-sub {
+  font-size: 9px;
+  opacity: 0.7;
+  margin-top: 2px;
 }
 footer {
   margin-top: 40px;
@@ -188,4 +132,11 @@ footer {
   font-size: 12px;
   color: #666;
   padding: 10px;
+}
+
+@media (max-width: 480px) {
+  .keyboard-grid { gap: 3px; }
+  .hole-col { gap: 3px; }
+  .note-btn { border-radius: 4px; font-size: 13px; }
+  .note-sub { display: none; }
 }
