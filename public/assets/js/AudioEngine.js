@@ -13,9 +13,12 @@ class AudioEngine {
     AudioEngine.instance = this;
   }
 
-  unlock() {
+  async unlock() {
     if (!this.ctx) {
-      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) throw new Error('当前浏览器不支持 Web Audio API');
+
+      this.ctx = new AudioContextClass();
       
       this.filter = this.ctx.createBiquadFilter();
       this.filter.type = 'lowpass';
@@ -37,7 +40,20 @@ class AudioEngine {
       this.filter.connect(this.compressor);
       this.compressor.connect(this.ctx.destination);
     }
-    if (this.ctx.state === 'suspended') this.ctx.resume();
+    if (this.ctx.state !== 'running') {
+      let timeoutId;
+      try {
+        await Promise.race([
+          this.ctx.resume(),
+          new Promise((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('音频引擎启动超时')), 2000);
+          }),
+        ]);
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+    if (this.ctx.state !== 'running') throw new Error('音频引擎未能启动');
   }
 
   makeHarmonicaDistortion(amount) {
@@ -56,6 +72,10 @@ class AudioEngine {
   }
 
   playNote(baseFreq, semitones = 0) {
+    if (!this.ctx || this.ctx.state !== 'running') {
+      throw new Error('请先开启音频引擎');
+    }
+
     const targetFreq = this.calculateFreqBySemitone(baseFreq, semitones);
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -81,11 +101,18 @@ class AudioEngine {
   }
 
   stopNote(player) {
+    if (!player || player.stopped) return;
+    player.stopped = true;
+
     const now = this.ctx.currentTime;
     player.gain.gain.cancelScheduledValues(now);
     player.gain.gain.setValueAtTime(player.gain.gain.value, now);
     player.gain.gain.linearRampToValueAtTime(0, now + 0.05);
     player.osc.stop(now + 0.05);
+    player.osc.addEventListener('ended', () => {
+      player.osc.disconnect();
+      player.gain.disconnect();
+    }, { once: true });
   }
 }
 const audioEngine = new AudioEngine();

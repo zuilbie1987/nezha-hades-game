@@ -3,9 +3,19 @@ window.addEventListener('DOMContentLoaded', () => {
   const unlockBtn = document.getElementById('unlockAudio');
   let harmonica = null;
 
-  unlockBtn.addEventListener('click', () => {
-    audioEngine.unlock();
-    unlockBtn.style.display = 'none';
-    harmonica = new HarmonicaController();
+  unlockBtn.addEventListener('click', async () => {
+    unlockBtn.disabled = true;
+    unlockBtn.classList.remove('error');
+
+    try {
+      await audioEngine.unlock();
+      unlockBtn.style.display = 'none';
+      harmonica = new HarmonicaController();
+    } catch (error) {
+      console.error(error);
+      unlockBtn.textContent = '音频启动失败，请重试';
+      unlockBtn.classList.add('error');
+      unlockBtn.disabled = false;
+    }
   });
 });

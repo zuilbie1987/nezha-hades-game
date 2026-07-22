@@ -11,8 +11,8 @@ class UnifiedInput {
   bindTouch() {
     this.wrap.addEventListener('touchstart', e => {
       e.preventDefault();
-      for (let i = 0; i < e.touches.length; i++) {
-        const t = e.touches[i];
+      for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
         this.onStart(t.identifier, t.clientX, t.clientY, e.target);
       }
     }, { passive:false });

@@ -34,6 +34,8 @@ h1 { font-size: 20px; }
   border-radius: 99px;
   cursor: pointer;
 }
+.audio-lock:disabled { cursor: wait; opacity: 0.75; }
+.audio-lock.error { background: #b91c1c; }
 .container {
   width: 100%;
   max-width: 800px;
