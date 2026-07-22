@@ -17,7 +17,8 @@ class HarmonicaController {
     { blow: [{ semitones: -1, label: '吹压' }, { semitones: -2, label: '吹压' }], draw: [{ semitones: 4, label: '超吸' }] },
   ];
 
-  constructor() {
+  constructor(onNoteStart = null) {
+    this.onNoteStart = onNoteStart;
     this.renderKeyboard();
     this.bindUnifiedInput();
     window.addEventListener('blur', () => this.stopAll());
@@ -117,6 +118,7 @@ class HarmonicaController {
       player: audioEngine.playNote(baseFreq, originSemitones)
     };
     this.activeTouches.set(touchId, touchData);
+    this.onNoteStart?.({ hole, type, semitones: originSemitones });
   }
 
   handleMove(touchId, y) {

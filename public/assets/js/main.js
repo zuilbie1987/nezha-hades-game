@@ -2,6 +2,7 @@
 window.addEventListener('DOMContentLoaded', () => {
   const unlockBtn = document.getElementById('unlockAudio');
   let harmonica = null;
+  const practice = new BluesPractice(audioEngine);
 
   unlockBtn.addEventListener('click', async () => {
     unlockBtn.disabled = true;
@@ -10,7 +11,8 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
       await audioEngine.unlock();
       unlockBtn.style.display = 'none';
-      harmonica = new HarmonicaController();
+      harmonica = new HarmonicaController(note => practice?.handleHarmonicaNote(note));
+      practice.enable();
     } catch (error) {
       console.error(error);
       unlockBtn.textContent = '音频启动失败，请重试';

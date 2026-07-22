@@ -3,9 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>在线十孔布鲁斯口琴模拟器 | 标准C调Richter音阶</title>
-  <meta name="description" content="同时支持手机触屏与电脑鼠标滑动操作的十孔布鲁斯口琴模拟器，带完整口琴外壳，每孔可视化压音、超吹滑动刻度，标准C调Richter音阶">
+  <title>蓝调口琴练习曲目与音符下落游戏 | C调十孔口琴模拟器</title>
+  <meta name="description" content="免费在线十孔口琴练习曲库，包含G调12小节蓝调、St. Louis Blues、爱尔兰画眉及From the West核心主题改编，支持曲目搜索、试听、音符下落和得分反馈。">
+  <meta name="keywords" content="蓝调口琴练习,十孔口琴模拟器,12小节蓝调,二把位,G调布鲁斯音阶,口琴游戏">
+  <meta name="robots" content="index,follow">
+  <link rel="canonical" href="https://neza-draw.web.app/harmonica.html">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="zh_CN">
+  <meta property="og:title" content="蓝调口琴练习曲目与音符下落游戏">
+  <meta property="og:description" content="搜索并练习蓝调、爱尔兰民谣与西部风格口琴曲目，支持试听和音符下落游戏。">
+  <meta property="og:url" content="https://neza-draw.web.app/harmonica.html">
   <link rel="stylesheet" href="/assets/css/main.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "LearningResource",
+    "name": "蓝调口琴练习曲目与音符下落游戏",
+    "description": "面向C调十孔口琴的G调二把位蓝调曲目试听与节奏练习。",
+    "url": "https://neza-draw.web.app/harmonica.html",
+    "inLanguage": "zh-CN",
+    "learningResourceType": "互动练习",
+    "educationalLevel": "初级",
+    "isAccessibleForFree": true,
+    "about": ["十孔口琴", "12小节蓝调", "G调二把位布鲁斯音阶"],
+    "hasPart": [
+      { "@type": "LearningResource", "name": "G调12小节蓝调音阶练习", "position": 1 },
+      { "@type": "LearningResource", "name": "St. Louis Blues（圣路易斯蓝调）入门改编", "position": 2, "author": { "@type": "Person", "name": "W.C. Handy" } },
+      { "@type": "LearningResource", "name": "爱尔兰画眉（Down by the Salley Gardens）五线谱节奏练习", "position": 3, "genre": "Traditional Irish", "timeRequired": "PT40S" },
+      { "@type": "LearningResource", "name": "From the West 核心主题口琴练习", "position": 4, "author": { "@type": "Person", "name": "Indiara Sfair" }, "isBasedOn": "https://www.youtube.com/watch?v=x1TTOLgnk8s", "timeRequired": "PT19S" }
+    ]
+  }
+  </script>
 </head>
 <body>
 <header>
@@ -18,12 +46,111 @@
   <button id="unlockAudio" class="audio-lock">点击开启音频引擎</button>
 </header>
 
-<div class="container">
+<main class="container">
+  <nav class="song-picker" aria-labelledby="songListTitle">
+    <div class="song-list-heading">
+      <p class="eyebrow">BLUES HARMONICA LESSONS</p>
+      <h2 id="songListTitle">选择练习曲目</h2>
+      <p>搜索或按风格筛选，曲目会分批展示。</p>
+    </div>
+    <div class="song-library-tools">
+      <label class="song-search-label" for="songSearch">搜索曲目</label>
+      <input id="songSearch" class="song-search" type="search" placeholder="输入曲名、作者或编号" autocomplete="off">
+      <div class="song-filters" aria-label="按风格筛选曲目">
+        <button type="button" data-song-filter="all" aria-pressed="true">全部</button>
+        <button type="button" data-song-filter="blues" aria-pressed="false">蓝调</button>
+        <button type="button" data-song-filter="folk" aria-pressed="false">民谣</button>
+      </div>
+      <span class="song-results" id="songResults" aria-live="polite">找到 4 首曲目</span>
+    </div>
+    <div class="song-list" id="songList">
+      <button class="song-choice active" type="button" data-song-id="g-blues-scale" data-category="blues" aria-pressed="true">
+        <span class="song-number">01</span>
+        <span><strong>G调12小节蓝调音阶</strong><small>原创基础练习 · 84 BPM</small></span>
+      </button>
+      <button class="song-choice" type="button" data-song-id="st-louis-blues" data-category="blues" aria-pressed="false">
+        <span class="song-number">02</span>
+        <span><strong>St. Louis Blues</strong><small>W.C. Handy · 入门改编 · 88 BPM</small></span>
+      </button>
+      <button class="song-choice" type="button" data-song-id="salley-gardens" data-category="folk" aria-pressed="false">
+        <span class="song-number">03</span>
+        <span><strong>爱尔兰画眉</strong><small>Traditional Irish · C大调移调 · 96 BPM</small></span>
+      </button>
+      <button class="song-choice" type="button" data-song-id="from-the-west-theme" data-category="blues" aria-pressed="false">
+        <span class="song-number">04</span>
+        <span><strong>From the West</strong><small>Indiara Sfair · 核心主题改编 · 100 BPM</small></span>
+      </button>
+    </div>
+    <button class="show-more-songs" id="showMoreSongs" type="button" hidden>显示更多曲目</button>
+  </nav>
+
+  <section class="practice-card" aria-labelledby="practiceTitle">
+    <div class="practice-heading">
+      <div>
+        <p class="eyebrow" id="lessonLabel">第 1 课 · C 调口琴二把位</p>
+        <h2 id="practiceTitle">G 调 12 小节蓝调音阶练习</h2>
+      </div>
+      <div class="song-meta" aria-label="乐曲信息">
+        <span id="songTempo">84 BPM</span><span>4/4 拍</span><span id="songDuration">约 34 秒</span>
+      </div>
+    </div>
+    <p class="practice-intro" id="practiceIntro">
+      使用 G–Bb–C–Db–D–F–G 七声音阶完成标准 12 小节蓝调进行。
+      先试听熟悉旋律，再在音符到达判定线时点击对应吹吸格。
+    </p>
+
+    <div class="practice-controls" aria-label="练习控制">
+      <button id="demoSong" class="game-button primary" type="button" disabled>▶ 试听示范</button>
+      <button id="startPractice" class="game-button" type="button" disabled>开始练习</button>
+      <button id="stopPractice" class="game-button subtle" type="button" disabled>停止</button>
+    </div>
+
+    <div class="game-status" aria-live="polite">
+      <span id="practiceStatus">开启音频引擎后即可开始</span>
+      <div class="scoreboard" aria-label="练习成绩">
+        <span>得分 <strong id="practiceScore">0</strong></span>
+        <span>连击 <strong id="practiceCombo">0</strong></span>
+        <span>命中 <strong id="practiceHits">0/48</strong></span>
+      </div>
+    </div>
+
+    <div class="falling-stage-layout">
+      <div class="falling-stage" id="fallingStage" aria-label="下落式音符练习区">
+        <div class="lane-grid" id="laneGrid" aria-label="可演奏的G调布鲁斯音阶轨道"></div>
+        <div class="falling-notes" id="fallingNotes" aria-hidden="true"></div>
+        <div class="judgement-line" aria-hidden="true"><span>现在演奏</span></div>
+        <div class="bar-indicator" id="barIndicator">准备 · 第 1/12 小节</div>
+        <div class="judgement-flash" id="judgementFlash" aria-live="polite"></div>
+      </div>
+      <div class="demo-seek">
+        <label for="demoSeek">试听起点</label>
+        <input id="demoSeek" type="range" min="0" max="47" step="0.5" value="0" disabled
+               aria-label="选择试听开始位置" aria-describedby="demoSeekValue">
+        <output id="demoSeekValue" for="demoSeek">第 1 小节<br>00:00</output>
+      </div>
+    </div>
+
+    <div class="scale-guide" id="scaleGuide" aria-label="G调二把位布鲁斯音阶口琴谱">
+      <span><b>-2</b> G</span><span><b>-3′</b> Bb</span><span><b>+4</b> C</span>
+      <span><b>-4′</b> Db</span><span><b>-4</b> D</span><span><b>-5</b> F</span><span><b>+6</b> G</span>
+    </div>
+
+    <details class="lesson-notes">
+      <summary>查看曲目结构与练习说明</summary>
+      <p>和声进行：G7 × 4小节 → C7 × 2小节 → G7 × 2小节 → D7 → C7 → G7 → D7。符号“+”代表吹气，“-”代表吸气，“′”代表降低半音的压音。</p>
+      <p>建议先完整试听一次，再以稳定节拍练习。Perfect 判定比 Good 更接近节拍中心；漏过判定线会记为 Miss。</p>
+      <p>可拖动音符下落区右侧的“试听起点”滑轨，从指定小节开始试听；练习计分期间滑轨会自动锁定。</p>
+      <p>第二课《St. Louis Blues》是基于 W.C. Handy 1914 年作品制作的初学者简化改编。原始乐谱可在 <a href="https://imslp.org/wiki/St._Louis_Blues_(Handy%2C_W._C.)" rel="external noopener">IMSLP 公版乐谱馆藏</a>查阅。</p>
+      <p>第三课《爱尔兰画眉》依据传统爱尔兰旋律《Down by the Salley Gardens》的五线谱与 MIDI 节奏制作 C 大调移调版：4/4 拍、96 BPM，保留弱起、八分音符、附点音符与长音。可查阅 <a href="https://www.flutetunes.com/tunes.php?id=2375" rel="external noopener">Traditional Irish 五线谱、MIDI 与音频资料</a>。</p>
+      <p>第四课根据 Indiara Sfair 原创曲《From the West》的<a href="https://www.youtube.com/watch?v=x1TTOLgnk8s" rel="external noopener">公开视频</a>与<a href="https://www.harptabs.com/song.php?ID=29128" rel="external noopener">公开口琴谱</a>制作核心主题教学改编：4/4 拍、100 BPM，在 C 调十孔口琴上呈现 D 小调音域，并用明确时值补足原口琴谱未标出的延音和空拍。本练习不是官方完整曲谱。</p>
+    </details>
+  </section>
+
   <div class="harmonica-shell" id="harmonicaWrap">
     <!-- 统一矩阵键盘容器 -->
     <div class="keyboard-grid" id="keyboardGrid"></div>
   </div>
-</div>
+</main>
 
 <footer>
   标准C调十孔布鲁斯Richter调式 · 吹吸独立音高 · 本地浏览器内存运行
@@ -32,6 +159,7 @@
 <script src="/assets/js/AudioEngine.js"></script>
 <script src="/assets/js/UnifiedInput.js"></script>
 <script src="/assets/js/HarmonicaController.js"></script>
+<script src="/assets/js/BluesPractice.js"></script>
 <script src="/assets/js/main.js"></script>
 </body>
 </html>

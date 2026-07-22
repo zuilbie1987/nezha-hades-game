@@ -6,7 +6,7 @@ class AudioEngine {
   compressor = null;
 
   BLOW_FREQS = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98, 2093.00];
-  DRAW_FREQS = [293.66, 392.00, 466.16, 587.33, 698.46, 880.00, 932.33, 1174.66, 1396.91, 1760.00];
+  DRAW_FREQS = [293.66, 392.00, 493.88, 587.33, 698.46, 880.00, 987.77, 1174.66, 1396.91, 1760.00];
 
   constructor() {
     if (AudioEngine.instance) return AudioEngine.instance;
