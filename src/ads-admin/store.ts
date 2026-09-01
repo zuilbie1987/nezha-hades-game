@@ -58,6 +58,10 @@ export type LedgerEntry = {
   description: string;
   amount: number;
   type: string;
+  currency: string;
+  status: 'posted' | 'pending' | 'void';
+  campaignId?: string;
+  updatedAt: string;
 };
 
 export type AdsAdminState = {
@@ -90,6 +94,12 @@ export function loadState(fallback: AdsAdminState): AdsAdminState {
     return {
       ...parsed,
       dailyMetrics: Array.isArray(parsed.dailyMetrics) ? parsed.dailyMetrics : [],
+      ledger: Array.isArray(parsed.ledger) ? parsed.ledger.map(entry => ({
+        ...entry,
+        currency: entry.currency ?? 'USD',
+        status: entry.status ?? 'posted',
+        updatedAt: entry.updatedAt ?? '',
+      })) : [],
     };
   } catch {
     return cloneState(fallback);

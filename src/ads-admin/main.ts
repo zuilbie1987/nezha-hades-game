@@ -112,12 +112,15 @@ function statusClass(status: string): string {
     投放中: 'success',
     审核通过: 'success',
     已启用: 'success',
+    已入账: 'success',
     预算受限: 'warning',
+    待处理: 'warning',
     审核中: 'info',
     未验证: 'warning',
     已暂停: 'muted',
     草稿: 'muted',
     已结束: 'muted',
+    已作废: 'muted',
     审核未通过: 'danger',
   };
   return map[status] ?? 'muted';
@@ -137,7 +140,17 @@ function aggregate() {
 }
 
 function balance(): number {
-  return state.ledger.reduce((sum, entry) => sum + entry.amount, 0);
+  return state.ledger
+    .filter(entry => entry.status === 'posted' && entry.currency === 'USD')
+    .reduce((sum, entry) => sum + entry.amount, 0);
+}
+
+function ledgerStatusLabel(status: string): string {
+  return ({ posted: '已入账', pending: '待处理', void: '已作废' } as Record<string, string>)[status] ?? status;
+}
+
+function ledgerTypeLabel(type: string): string {
+  return ({ opening_balance: '初始余额', ad_spend: '广告消耗', credit: '入账', refund: '退款', adjustment: '调整' } as Record<string, string>)[type] ?? type;
 }
 
 function pageHeading(title: string, description: string, action = ''): string {
@@ -169,7 +182,7 @@ function renderApp(): void {
         </nav>
         <div class="sidebar-footer">
           <button class="ghost-button sidebar-reset" type="button" data-action="sync-sheet" ${dataSourceStatus === 'loading' ? 'disabled' : ''}>↻ 同步 Google Sheet</button>
-          <p>${dataSourceStatus === 'remote' ? '推广数据来自 Google Sheet' : '当前显示本地备用数据'}</p>
+          <p>${dataSourceStatus === 'remote' ? '数据来自 Google Sheet' : '当前显示本地备用数据'}</p>
         </div>
       </aside>
       <button class="sidebar-scrim" type="button" data-action="close-menu" aria-label="关闭菜单"></button>
@@ -212,10 +225,10 @@ async function syncSheetData(showFeedback = false): Promise<void> {
   try {
     const remote = await loadSheetData(controller.signal);
     if (controller.signal.aborted) return;
-    state = { ...state, campaigns: remote.campaigns, dailyMetrics: remote.dailyMetrics };
+    state = { ...state, campaigns: remote.campaigns, dailyMetrics: remote.dailyMetrics, ledger: remote.ledger };
     dataSourceStatus = 'remote';
     renderApp();
-    if (showFeedback) showToast(`已同步 ${remote.campaigns.length} 个推广计划和 ${remote.dailyMetrics.length} 条每日数据。`);
+    if (showFeedback) showToast(`已同步 ${remote.campaigns.length} 个推广计划、${remote.dailyMetrics.length} 条每日数据和 ${remote.ledger.length} 条流水。`);
   } catch (error) {
     if (activeSyncController !== controller) return;
     dataSourceStatus = 'fallback';
@@ -492,9 +505,9 @@ function renderBilling(): string {
       </section>
     </div>
     <section class="panel table-panel">
-      <div class="panel-heading"><div><h2>流水</h2><p>所有记录仅保存在当前浏览器</p></div></div>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>日期</th><th>类型</th><th>说明</th><th>金额</th></tr></thead><tbody>
-        ${state.ledger.map(entry => `<tr><td>${entry.date}</td><td>${entry.type}</td><td>${escapeHtml(entry.description)}</td><td class="${entry.amount >= 0 ? 'positive' : 'negative'}">${entry.amount >= 0 ? '+' : ''}${formatMoney(entry.amount)}</td></tr>`).join('')}
+      <div class="panel-heading"><div><h2>流水</h2><p>${dataSourceStatus === 'remote' ? '流水数据来自 Google Sheet' : '当前显示本地备用流水'}</p></div></div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>日期</th><th>类型</th><th>说明</th><th>状态</th><th>金额</th></tr></thead><tbody>
+        ${state.ledger.length ? state.ledger.map(entry => `<tr><td>${escapeHtml(entry.date)}</td><td>${escapeHtml(ledgerTypeLabel(entry.type))}</td><td>${escapeHtml(entry.description)}</td><td><span class="status ${statusClass(ledgerStatusLabel(entry.status))}"><i></i>${ledgerStatusLabel(entry.status)}</span></td><td class="${entry.amount >= 0 ? 'positive' : 'negative'}">${entry.amount >= 0 ? '+' : ''}${formatMoney(entry.amount)}</td></tr>`).join('') : '<tr><td colspan="5">暂无流水</td></tr>'}
       </tbody></table></div>
     </section>`;
 }

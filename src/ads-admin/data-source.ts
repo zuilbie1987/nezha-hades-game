@@ -1,6 +1,6 @@
-import type { Campaign, CampaignObjective, CampaignStatus, DailyMetric } from './store';
+import type { Campaign, CampaignObjective, CampaignStatus, DailyMetric, LedgerEntry } from './store';
 
-export const ADS_DATA_API_URL = 'https://script.google.com/macros/s/AKfycbzAgdqL2lrwNPumuj7WsHQWuaKmOY04_lIkMycULq5AhP7FIeEaNTm1ZrlmSZ5DkaBx/exec';
+export const ADS_DATA_API_URL = 'https://script.google.com/macros/s/AKfycbxa0gHRRIPqA8U6S5QexUOcz_HvvopUcqAr9PePHdvhi0BSe1u1ZwEK6EpnejXhouuD/exec';
 
 type SheetRow = Record<string, unknown>;
 
@@ -114,7 +114,29 @@ export function mapSheetDailyMetrics(rows: SheetRow[], updatedAt = ''): DailyMet
   return [...metrics.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-async function fetchSheet(sheet: 'campaigns' | 'daily_metrics', signal: AbortSignal): Promise<SheetResponse> {
+export function mapSheetLedger(rows: SheetRow[], updatedAt = ''): LedgerEntry[] {
+  const ledger = new Map<string, LedgerEntry>();
+  rows.forEach(row => {
+    const id = String(row.transaction_id ?? row.id ?? '').trim();
+    if (!id) return;
+    const rawStatus = String(row.status ?? '').trim().toLowerCase();
+    const status: LedgerEntry['status'] = rawStatus === 'posted' || rawStatus === 'void' ? rawStatus : 'pending';
+    ledger.set(id, {
+      id,
+      date: String(row.occurred_at ?? row.date ?? '').trim(),
+      type: String(row.type ?? '').trim(),
+      description: String(row.description ?? '').trim(),
+      amount: toNumber(row.amount),
+      currency: String(row.currency ?? 'USD').trim().toUpperCase() || 'USD',
+      status,
+      campaignId: String(row.campaign_id ?? row.campaignId ?? '').trim() || undefined,
+      updatedAt: String(row.updated_at ?? row.updatedAt ?? updatedAt),
+    });
+  });
+  return [...ledger.values()].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+async function fetchSheet(sheet: 'campaigns' | 'daily_metrics' | 'billing_ledger', signal: AbortSignal): Promise<SheetResponse> {
   const url = new URL(ADS_DATA_API_URL);
   url.searchParams.set('sheet', sheet);
   const response = await fetch(url, { cache: 'no-store', signal });
@@ -127,14 +149,16 @@ async function fetchSheet(sheet: 'campaigns' | 'daily_metrics', signal: AbortSig
   return payload as SheetResponse;
 }
 
-export async function loadSheetData(signal: AbortSignal): Promise<{ campaigns: Campaign[]; dailyMetrics: DailyMetric[]; updatedAt: string }> {
-  const [campaignResponse, metricResponse] = await Promise.all([
+export async function loadSheetData(signal: AbortSignal): Promise<{ campaigns: Campaign[]; dailyMetrics: DailyMetric[]; ledger: LedgerEntry[]; updatedAt: string }> {
+  const [campaignResponse, metricResponse, ledgerResponse] = await Promise.all([
     fetchSheet('campaigns', signal),
     fetchSheet('daily_metrics', signal),
+    fetchSheet('billing_ledger', signal),
   ]);
-  const updatedAt = campaignResponse.updatedAt ?? metricResponse.updatedAt ?? new Date().toISOString();
+  const updatedAt = campaignResponse.updatedAt ?? metricResponse.updatedAt ?? ledgerResponse.updatedAt ?? new Date().toISOString();
   const campaigns = mapSheetCampaigns(campaignResponse.data, updatedAt);
   const dailyMetrics = mapSheetDailyMetrics(metricResponse.data, updatedAt);
+  const ledger = mapSheetLedger(ledgerResponse.data, updatedAt);
   if (!campaigns.length) throw new Error('Google Sheet 中没有有效的推广计划');
-  return { campaigns, dailyMetrics, updatedAt };
+  return { campaigns, dailyMetrics, ledger, updatedAt };
 }

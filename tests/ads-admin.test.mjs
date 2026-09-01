@@ -41,11 +41,28 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
   assert.match(main, /exportReport/);
   assert.match(demoData, /status: '预算受限'/);
   assert.match(demoData, /conversionActions/);
-  assert.match(dataSource, /AKfycbzAgdqL2lrwNPumuj7WsHQWuaKmOY04_lIkMycULq5AhP7FIeEaNTm1ZrlmSZ5DkaBx/);
+  assert.match(dataSource, /AKfycbxa0gHRRIPqA8U6S5QexUOcz_HvvopUcqAr9PePHdvhi0BSe1u1ZwEK6EpnejXhouuD/);
   assert.match(dataSource, /url\.searchParams\.set\('sheet', sheet\)/);
   assert.match(dataSource, /fetchSheet\('campaigns'/);
   assert.match(dataSource, /fetchSheet\('daily_metrics'/);
+  assert.match(dataSource, /fetchSheet\('billing_ledger'/);
+  assert.match(main, /entry\.status === 'posted' && entry\.currency === 'USD'/);
   assert.doesNotMatch(demoData, /WEEKLY_SERIES/);
+});
+
+test('billing ledger rows map, deduplicate and protect pending balances', async () => {
+  const { mapSheetLedger } = await import('../src/ads-admin/data-source.ts');
+  const ledger = mapSheetLedger([
+    { transaction_id: 'txn_1', occurred_at: '2026-09-01 09:00:00', type: 'opening_balance', description: '初始余额', amount: '5,000.00', currency: 'usd', status: 'posted' },
+    { transaction_id: 'txn_2', occurred_at: '2026-09-02 09:00:00', type: 'ad_spend', description: '广告消耗', amount: '-475.82', currency: 'USD', status: '' },
+    { transaction_id: 'txn_1', occurred_at: '2026-09-01 09:00:00', type: 'opening_balance', description: '修正余额', amount: '4,900.00', currency: 'USD', status: 'posted' },
+  ]);
+
+  assert.equal(ledger.length, 2);
+  assert.equal(ledger[0].id, 'txn_2');
+  assert.equal(ledger[0].status, 'pending');
+  assert.equal(ledger[1].amount, 4900);
+  assert.equal(ledger[1].currency, 'USD');
 });
 
 test('Google Sheet rows preserve campaign configuration and daily metrics', async () => {

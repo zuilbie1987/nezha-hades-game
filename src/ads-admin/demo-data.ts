@@ -136,9 +136,9 @@ export const DEMO_STATE: AdsAdminState = {
     { id: 'conv-form', name: '合作表单提交', category: '潜在客户', status: '未验证', count: 0 },
   ],
   ledger: [
-    { id: 'txn-01', date: '2026-08-26 10:24', description: '演示充值', amount: 5000, type: '充值' },
-    { id: 'txn-02', date: '2026-08-27 23:59', description: '推广计划日消耗', amount: -468.32, type: '消费' },
-    { id: 'txn-03', date: '2026-08-28 12:00', description: '推广计划当日消耗', amount: -286.75, type: '消费' },
+    { id: 'txn-01', date: '2026-08-26 10:24', description: '演示充值', amount: 5000, type: 'credit', currency: 'USD', status: 'posted', updatedAt: '' },
+    { id: 'txn-02', date: '2026-08-27 23:59', description: '推广计划日消耗', amount: -468.32, type: 'ad_spend', currency: 'USD', status: 'posted', updatedAt: '' },
+    { id: 'txn-03', date: '2026-08-28 12:00', description: '推广计划当日消耗', amount: -286.75, type: 'ad_spend', currency: 'USD', status: 'posted', updatedAt: '' },
   ],
   preferences: {
     dateRange: '过去 30 天',
