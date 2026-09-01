@@ -20,6 +20,17 @@ export type Campaign = {
   updatedAt: string;
 };
 
+export type DailyMetric = {
+  id: string;
+  date: string;
+  campaignId: string;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  spend: number;
+  updatedAt: string;
+};
+
 export type AdCreative = {
   id: string;
   campaignId: string;
@@ -52,6 +63,7 @@ export type LedgerEntry = {
 export type AdsAdminState = {
   schemaVersion: 1;
   campaigns: Campaign[];
+  dailyMetrics: DailyMetric[];
   ads: AdCreative[];
   conversionActions: ConversionAction[];
   ledger: LedgerEntry[];
@@ -75,7 +87,10 @@ export function loadState(fallback: AdsAdminState): AdsAdminState {
     if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.campaigns)) {
       return cloneState(fallback);
     }
-    return parsed;
+    return {
+      ...parsed,
+      dailyMetrics: Array.isArray(parsed.dailyMetrics) ? parsed.dailyMetrics : [],
+    };
   } catch {
     return cloneState(fallback);
   }

@@ -2,6 +2,7 @@ import type { AdsAdminState } from './store';
 
 export const DEMO_STATE: AdsAdminState = {
   schemaVersion: 1,
+  dailyMetrics: [],
   campaigns: [
     {
       id: 'cmp-summer-game',
@@ -143,13 +144,3 @@ export const DEMO_STATE: AdsAdminState = {
     dateRange: '过去 30 天',
   },
 };
-
-export const WEEKLY_SERIES = [
-  { day: '8/22', spend: 318, clicks: 672 },
-  { day: '8/23', spend: 356, clicks: 744 },
-  { day: '8/24', spend: 334, clicks: 712 },
-  { day: '8/25', spend: 405, clicks: 856 },
-  { day: '8/26', spend: 442, clicks: 932 },
-  { day: '8/27', spend: 468, clicks: 978 },
-  { day: '8/28', spend: 287, clicks: 624 },
-];

@@ -1,4 +1,4 @@
-import type { Campaign, CampaignObjective, CampaignStatus } from './store';
+import type { Campaign, CampaignObjective, CampaignStatus, DailyMetric } from './store';
 
 export const ADS_DATA_API_URL = 'https://script.google.com/macros/s/AKfycbzAgdqL2lrwNPumuj7WsHQWuaKmOY04_lIkMycULq5AhP7FIeEaNTm1ZrlmSZ5DkaBx/exec';
 
@@ -8,13 +8,6 @@ type SheetResponse = {
   success: boolean;
   data: SheetRow[];
   updatedAt?: string;
-};
-
-type CampaignMetrics = {
-  spend: number;
-  impressions: number;
-  clicks: number;
-  conversions: number;
 };
 
 const statusMap: Record<string, CampaignStatus> = {
@@ -37,7 +30,7 @@ const campaignStatuses: CampaignStatus[] = ['草稿', '审核中', '投放中', 
 const campaignObjectives: CampaignObjective[] = ['网站访问', '获取线索', '应用推广'];
 
 function toNumber(value: unknown, fallback = 0): number {
-  const normalized = String(value ?? '').replace(/[\s,￥¥]/g, '');
+  const normalized = String(value ?? '').replace(/[\s,$￥¥]/g, '');
   if (!normalized) return fallback;
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -70,23 +63,7 @@ function campaignDuration(startDate: string, endDate: string): number {
   return Math.max(1, Math.round((end - start) / 86_400_000) + 1);
 }
 
-function aggregateMetrics(rows: SheetRow[]): Map<string, CampaignMetrics> {
-  const metrics = new Map<string, CampaignMetrics>();
-  rows.forEach(row => {
-    const campaignId = String(row.campaign_id ?? row.campaignId ?? '').trim();
-    if (!campaignId) return;
-    const current = metrics.get(campaignId) ?? { spend: 0, impressions: 0, clicks: 0, conversions: 0 };
-    current.spend += toNumber(row.cost ?? row.spend);
-    current.impressions += toNumber(row.impressions);
-    current.clicks += toNumber(row.clicks);
-    current.conversions += toNumber(row.conversions);
-    metrics.set(campaignId, current);
-  });
-  return metrics;
-}
-
-export function mapSheetCampaigns(campaignRows: SheetRow[], metricRows: SheetRow[], updatedAt = ''): Campaign[] {
-  const metrics = aggregateMetrics(metricRows);
+export function mapSheetCampaigns(campaignRows: SheetRow[], updatedAt = ''): Campaign[] {
   return campaignRows.flatMap(row => {
     const id = String(row.id ?? '').trim();
     const name = String(row.name ?? '').trim();
@@ -95,8 +72,6 @@ export function mapSheetCampaigns(campaignRows: SheetRow[], metricRows: SheetRow
     const startDate = String(row.start_date ?? row.startDate ?? '').trim();
     const endDate = String(row.end_date ?? row.endDate ?? '').trim();
     const dailyBudget = toNumber(row.daily_budget ?? row.dailyBudget);
-    const campaignMetrics = metrics.get(id);
-
     return [{
       id,
       name,
@@ -104,10 +79,10 @@ export function mapSheetCampaigns(campaignRows: SheetRow[], metricRows: SheetRow
       status: toStatus(row.status),
       dailyBudget,
       totalBudget: toNumber(row.total_budget ?? row.totalBudget, dailyBudget * campaignDuration(startDate, endDate)),
-      spend: campaignMetrics?.spend ?? toNumber(row.spend ?? row.cost),
-      impressions: campaignMetrics?.impressions ?? toNumber(row.impressions),
-      clicks: campaignMetrics?.clicks ?? toNumber(row.clicks),
-      conversions: campaignMetrics?.conversions ?? toNumber(row.conversions),
+      spend: 0,
+      impressions: 0,
+      clicks: 0,
+      conversions: 0,
       bid: toNumber(row.bid),
       startDate,
       endDate,
@@ -116,6 +91,27 @@ export function mapSheetCampaigns(campaignRows: SheetRow[], metricRows: SheetRow
       updatedAt: String(row.updated_at ?? row.updatedAt ?? updatedAt),
     }];
   });
+}
+
+export function mapSheetDailyMetrics(rows: SheetRow[], updatedAt = ''): DailyMetric[] {
+  const metrics = new Map<string, DailyMetric>();
+  rows.forEach(row => {
+    const date = String(row.date ?? '').trim();
+    const campaignId = String(row.campaign_id ?? row.campaignId ?? '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !campaignId) return;
+    const uniqueKey = `${date}:${campaignId}`;
+    metrics.set(uniqueKey, {
+      id: String(row.metric_id ?? row.id ?? `${date}_${campaignId}`).trim(),
+      date,
+      campaignId,
+      impressions: toNumber(row.impressions),
+      clicks: toNumber(row.clicks),
+      conversions: toNumber(row.conversions),
+      spend: toNumber(row.cost ?? row.spend),
+      updatedAt: String(row.updated_at ?? row.updatedAt ?? updatedAt),
+    });
+  });
+  return [...metrics.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 async function fetchSheet(sheet: 'campaigns' | 'daily_metrics', signal: AbortSignal): Promise<SheetResponse> {
@@ -131,13 +127,14 @@ async function fetchSheet(sheet: 'campaigns' | 'daily_metrics', signal: AbortSig
   return payload as SheetResponse;
 }
 
-export async function loadSheetCampaigns(signal: AbortSignal): Promise<{ campaigns: Campaign[]; updatedAt: string }> {
+export async function loadSheetData(signal: AbortSignal): Promise<{ campaigns: Campaign[]; dailyMetrics: DailyMetric[]; updatedAt: string }> {
   const [campaignResponse, metricResponse] = await Promise.all([
     fetchSheet('campaigns', signal),
     fetchSheet('daily_metrics', signal),
   ]);
   const updatedAt = campaignResponse.updatedAt ?? metricResponse.updatedAt ?? new Date().toISOString();
-  const campaigns = mapSheetCampaigns(campaignResponse.data, metricResponse.data, updatedAt);
+  const campaigns = mapSheetCampaigns(campaignResponse.data, updatedAt);
+  const dailyMetrics = mapSheetDailyMetrics(metricResponse.data, updatedAt);
   if (!campaigns.length) throw new Error('Google Sheet 中没有有效的推广计划');
-  return { campaigns, updatedAt };
+  return { campaigns, dailyMetrics, updatedAt };
 }

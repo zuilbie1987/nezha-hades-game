@@ -1,6 +1,7 @@
 import './style.css';
-import { DEMO_STATE, WEEKLY_SERIES } from './demo-data';
-import { loadSheetCampaigns } from './data-source';
+import { DEMO_STATE } from './demo-data';
+import { loadSheetData } from './data-source';
+import { campaignsForDateRange, dailySeriesForDateRange } from './metrics';
 import {
   campaignCpa,
   campaignCpc,
@@ -122,8 +123,12 @@ function statusClass(status: string): string {
   return map[status] ?? 'muted';
 }
 
+function performanceCampaigns(): Campaign[] {
+  return campaignsForDateRange(state.campaigns, state.dailyMetrics, state.preferences.dateRange);
+}
+
 function aggregate() {
-  return state.campaigns.reduce((totals, campaign) => ({
+  return performanceCampaigns().reduce((totals, campaign) => ({
     spend: totals.spend + campaign.spend,
     impressions: totals.impressions + campaign.impressions,
     clicks: totals.clicks + campaign.clicks,
@@ -205,12 +210,12 @@ async function syncSheetData(showFeedback = false): Promise<void> {
   const timeout = window.setTimeout(() => controller.abort(), 8_000);
 
   try {
-    const remote = await loadSheetCampaigns(controller.signal);
+    const remote = await loadSheetData(controller.signal);
     if (controller.signal.aborted) return;
-    state = { ...state, campaigns: remote.campaigns };
+    state = { ...state, campaigns: remote.campaigns, dailyMetrics: remote.dailyMetrics };
     dataSourceStatus = 'remote';
     renderApp();
-    if (showFeedback) showToast(`已同步 ${remote.campaigns.length} 个推广计划。`);
+    if (showFeedback) showToast(`已同步 ${remote.campaigns.length} 个推广计划和 ${remote.dailyMetrics.length} 条每日数据。`);
   } catch (error) {
     if (activeSyncController !== controller) return;
     dataSourceStatus = 'fallback';
@@ -240,7 +245,7 @@ function renderOverview(): string {
   const ctr = totals.impressions ? totals.clicks / totals.impressions : 0;
   const cpc = totals.clicks ? totals.spend / totals.clicks : 0;
   const cpa = totals.conversions ? totals.spend / totals.conversions : 0;
-  const active = state.campaigns.filter(campaign => campaign.status === '投放中' || campaign.status === '预算受限');
+  const active = performanceCampaigns().filter(campaign => campaign.status === '投放中' || campaign.status === '预算受限');
   return `
     ${pageHeading('账户概览', '快速了解推广效果、预算状态和需要处理的问题。', `
       <button class="primary-button" type="button" data-action="new-campaign">＋ 新建推广计划</button>`)}
@@ -288,25 +293,35 @@ function metricCard(label: string, value: string, detail: string, tone: string):
 }
 
 function renderTrendChart(): string {
+  const series = dailySeriesForDateRange(state.dailyMetrics, state.preferences.dateRange);
+  if (!series.some(point => point.spend || point.clicks || point.impressions || point.conversions)) {
+    return `<div class="empty-state"><span>⌁</span><h3>当前周期暂无每日数据</h3><p>在 Google Sheet 的 daily_metrics 中添加该日期范围的数据后重新同步。</p></div>`;
+  }
   const width = 680;
   const height = 220;
-  const maxSpend = Math.max(...WEEKLY_SERIES.map(point => point.spend));
-  const points = WEEKLY_SERIES.map((point, index) => {
-    const x = 24 + index * ((width - 48) / (WEEKLY_SERIES.length - 1));
+  const maxSpend = Math.max(1, ...series.map(point => point.spend));
+  const xForIndex = (index: number) => series.length === 1 ? width / 2 : 24 + index * ((width - 48) / (series.length - 1));
+  const points = series.map((point, index) => {
+    const x = xForIndex(index);
     const y = height - 34 - (point.spend / maxSpend) * (height - 70);
     return `${x},${y}`;
   }).join(' ');
+  const firstX = xForIndex(0);
+  const lastX = xForIndex(series.length - 1);
+  const labelStep = Math.max(1, Math.ceil(series.length / 7));
   return `
-    <div class="trend-chart" role="img" aria-label="过去7天消耗趋势折线图">
+    <div class="trend-chart" role="img" aria-label="${escapeHtml(state.preferences.dateRange)}每日消耗趋势折线图">
       <svg viewBox="0 0 ${width} ${height}" aria-hidden="true">
         <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6d5dfc" stop-opacity=".3"/><stop offset="1" stop-color="#6d5dfc" stop-opacity="0"/></linearGradient></defs>
         <line x1="24" y1="45" x2="656" y2="45"/><line x1="24" y1="105" x2="656" y2="105"/><line x1="24" y1="165" x2="656" y2="165"/>
-        <polygon points="24,186 ${points} 656,186" fill="url(#chartFill)"/>
+        <polygon points="${firstX},186 ${points} ${lastX},186" fill="url(#chartFill)"/>
         <polyline points="${points}"/>
-        ${WEEKLY_SERIES.map((point, index) => {
-          const x = 24 + index * ((width - 48) / (WEEKLY_SERIES.length - 1));
+        ${series.map((point, index) => {
+          const x = xForIndex(index);
           const y = height - 34 - (point.spend / maxSpend) * (height - 70);
-          return `<circle cx="${x}" cy="${y}" r="4"><title>${point.day}：${formatMoney(point.spend)}，${point.clicks} 次点击</title></circle><text x="${x}" y="210">${point.day}</text>`;
+          const label = `${Number(point.date.slice(5, 7))}/${Number(point.date.slice(8, 10))}`;
+          const showLabel = index % labelStep === 0 || index === series.length - 1;
+          return `<circle cx="${x}" cy="${y}" r="4"><title>${point.date}：${formatMoney(point.spend)}，${point.clicks} 次点击</title></circle>${showLabel ? `<text x="${x}" y="210">${label}</text>` : ''}`;
         }).join('')}
       </svg>
     </div>`;
@@ -314,7 +329,7 @@ function renderTrendChart(): string {
 
 function renderCampaigns(): string {
   const statuses = ['全部', '投放中', '预算受限', '审核中', '已暂停', '草稿', '已结束'];
-  const filtered = state.campaigns.filter(campaign => {
+  const filtered = performanceCampaigns().filter(campaign => {
     const queryMatches = !campaignQuery || campaign.name.toLocaleLowerCase('zh-CN').includes(campaignQuery.toLocaleLowerCase('zh-CN'));
     return queryMatches && (campaignStatus === '全部' || campaign.status === campaignStatus);
   });
@@ -430,7 +445,7 @@ function renderReports(): string {
       <div class="panel-heading"><div><h2>推广计划表现</h2><p>按消耗从高到低排列</p></div></div>
       <div class="table-scroll"><table class="data-table">
         <thead><tr><th>推广计划</th><th>消耗</th><th>展示</th><th>点击</th><th>CTR</th><th>平均 CPC</th><th>转化</th><th>转化成本</th></tr></thead>
-        <tbody>${[...state.campaigns].sort((a, b) => b.spend - a.spend).map(campaign => `
+        <tbody>${performanceCampaigns().sort((a, b) => b.spend - a.spend).map(campaign => `
           <tr><td><strong>${escapeHtml(campaign.name)}</strong><small>${campaign.objective}</small></td><td>${formatMoney(campaign.spend)}</td><td>${formatNumber(campaign.impressions)}</td><td>${formatNumber(campaign.clicks)}</td><td>${formatPercent(campaignCtr(campaign))}</td><td>${formatMoney(campaignCpc(campaign))}</td><td>${formatNumber(campaign.conversions)}</td><td>${formatMoney(campaignCpa(campaign))}</td></tr>`).join('')}</tbody>
       </table></div>
     </section>`;
@@ -695,7 +710,7 @@ function deleteCampaign(id: string): void {
 
 function exportReport(): void {
   const headers = ['推广计划', '状态', '目标', '消耗', '展示', '点击', 'CTR', '平均CPC', '转化'];
-  const rows = state.campaigns.map(campaign => [
+  const rows = performanceCampaigns().map(campaign => [
     campaign.name,
     campaign.status,
     campaign.objective,
@@ -711,10 +726,10 @@ function exportReport(): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'spark-ads-demo-report.csv';
+  link.download = 'spark-ads-report.csv';
   link.click();
   URL.revokeObjectURL(url);
-  showToast('演示报告已导出。');
+  showToast('报告已导出。');
 }
 
 function showToast(message: string): void {
