@@ -1,12 +1,12 @@
 import './style.css';
 import { DEMO_STATE, WEEKLY_SERIES } from './demo-data';
+import { loadSheetCampaigns } from './data-source';
 import {
   campaignCpa,
   campaignCpc,
   campaignCtr,
   createId,
   loadState,
-  resetStoredState,
   saveState,
 } from './store';
 import type { AdCreative, Campaign, CampaignObjective } from './store';
@@ -51,6 +51,8 @@ let campaignQuery = '';
 let campaignStatus = '全部';
 let wizardStep = 1;
 let draft = createDraft();
+let dataSourceStatus: 'loading' | 'remote' | 'fallback' = 'loading';
+let activeSyncController: AbortController | undefined;
 
 function createDraft(): CampaignDraft {
   const today = new Date();
@@ -89,9 +91,9 @@ function escapeHtml(value: unknown): string {
 }
 
 function formatMoney(value: number): string {
-  return new Intl.NumberFormat('zh-CN', {
+  return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'CNY',
+    currency: 'USD',
     minimumFractionDigits: 2,
   }).format(value);
 }
@@ -137,7 +139,7 @@ function pageHeading(title: string, description: string, action = ''): string {
   return `
     <div class="page-heading">
       <div>
-        <p class="eyebrow">SPARK ADS / 演示工作区</p>
+        <p class="eyebrow">SPARK ADS</p>
         <h1>${escapeHtml(title)}</h1>
         <p>${escapeHtml(description)}</p>
       </div>
@@ -161,8 +163,8 @@ function renderApp(): void {
             </a>`).join('')}
         </nav>
         <div class="sidebar-footer">
-          <button class="ghost-button sidebar-reset" type="button" data-action="reset-demo">↻ 重置演示数据</button>
-          <p>数据仅保存在当前浏览器</p>
+          <button class="ghost-button sidebar-reset" type="button" data-action="sync-sheet" ${dataSourceStatus === 'loading' ? 'disabled' : ''}>↻ 同步 Google Sheet</button>
+          <p>${dataSourceStatus === 'remote' ? '推广数据来自 Google Sheet' : '当前显示本地备用数据'}</p>
         </div>
       </aside>
       <button class="sidebar-scrim" type="button" data-action="close-menu" aria-label="关闭菜单"></button>
@@ -185,10 +187,6 @@ function renderApp(): void {
             <button class="icon-button notification" type="button" aria-label="通知">●</button>
           </div>
         </header>
-        <div class="demo-banner" role="note">
-          <strong>演示模式</strong>
-          当前页面使用模拟数据与本地存储，不会产生真实投放、扣费或转化。
-        </div>
         <main class="content" id="mainContent">
           ${renderView(view)}
         </main>
@@ -196,6 +194,35 @@ function renderApp(): void {
     </div>
     <dialog class="campaign-dialog" id="campaignDialog" aria-labelledby="wizardTitle"></dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>`;
+}
+
+async function syncSheetData(showFeedback = false): Promise<void> {
+  activeSyncController?.abort();
+  const controller = new AbortController();
+  activeSyncController = controller;
+  dataSourceStatus = 'loading';
+  renderApp();
+  const timeout = window.setTimeout(() => controller.abort(), 8_000);
+
+  try {
+    const remote = await loadSheetCampaigns(controller.signal);
+    if (controller.signal.aborted) return;
+    state = { ...state, campaigns: remote.campaigns };
+    dataSourceStatus = 'remote';
+    renderApp();
+    if (showFeedback) showToast(`已同步 ${remote.campaigns.length} 个推广计划。`);
+  } catch (error) {
+    if (activeSyncController !== controller) return;
+    dataSourceStatus = 'fallback';
+    renderApp();
+    if (showFeedback) {
+      const message = error instanceof Error && error.name !== 'AbortError' ? error.message : 'Google Sheet API 请求超时';
+      showToast(`${message}，已保留本地备用数据。`);
+    }
+  } finally {
+    window.clearTimeout(timeout);
+    if (activeSyncController === controller) activeSyncController = undefined;
+  }
 }
 
 function renderView(view: ViewId): string {
@@ -218,7 +245,7 @@ function renderOverview(): string {
     ${pageHeading('账户概览', '快速了解推广效果、预算状态和需要处理的问题。', `
       <button class="primary-button" type="button" data-action="new-campaign">＋ 新建推广计划</button>`)}
     <section class="metric-grid" aria-label="账户核心指标">
-      ${metricCard('演示余额', formatMoney(balance()), '仅为本地模拟账务', 'wallet')}
+      ${metricCard('可用余额', formatMoney(balance()), '', 'wallet')}
       ${metricCard('总消耗', formatMoney(totals.spend), '较上一周期 +12.8%', 'spend')}
       ${metricCard('展示量', formatNumber(totals.impressions), '覆盖全部推广计划', 'impressions')}
       ${metricCard('点击量', formatNumber(totals.clicks), `点击率 ${formatPercent(ctr)}`, 'clicks')}
@@ -256,7 +283,7 @@ function metricCard(label: string, value: string, detail: string, tone: string):
     <article class="metric-card ${tone}">
       <span class="metric-label">${label}</span>
       <strong>${value}</strong>
-      <small>${detail}</small>
+      ${detail ? `<small>${detail}</small>` : ''}
     </article>`;
 }
 
@@ -347,7 +374,7 @@ function renderGroups(): string {
   return `
     ${pageHeading('广告组', '按受众主题组织广告、出价和投放条件。')}
     <section class="panel table-panel">
-      <div class="panel-heading"><div><h2>全部广告组</h2><p>第一版为每个推广计划生成一个默认广告组</p></div></div>
+      <div class="panel-heading"><div><h2>全部广告组</h2></div></div>
       <div class="table-scroll"><table class="data-table">
         <thead><tr><th>广告组</th><th>所属推广计划</th><th>目标</th><th>最高 CPC</th><th>地域</th><th>设备</th><th>状态</th></tr></thead>
         <tbody>${state.campaigns.map(campaign => `
@@ -387,7 +414,7 @@ function creativeCard(ad: AdCreative): string {
 function renderReports(): string {
   const totals = aggregate();
   return `
-    ${pageHeading('推广报告', '比较推广计划表现并导出演示数据。', `
+    ${pageHeading('推广报告', '比较推广计划表现并导出数据。', `
       <button class="secondary-button" type="button" data-action="export-report">↓ 导出 CSV</button>`)}
     <section class="report-summary panel">
       <div><span>总消耗</span><strong>${formatMoney(totals.spend)}</strong></div>
@@ -396,7 +423,7 @@ function renderReports(): string {
       <div><span>转化数</span><strong>${formatNumber(totals.conversions)}</strong></div>
     </section>
     <section class="panel chart-panel">
-      <div class="panel-heading"><div><h2>账户趋势</h2><p>${state.preferences.dateRange} · 当前显示演示数据</p></div><span class="legend"><i></i> 消耗</span></div>
+      <div class="panel-heading"><div><h2>账户趋势</h2><p>${state.preferences.dateRange}</p></div><span class="legend"><i></i> 消耗</span></div>
       ${renderTrendChart()}
     </section>
     <section class="panel table-panel">
@@ -439,11 +466,10 @@ function renderConversions(): string {
 
 function renderBilling(): string {
   return `
-    ${pageHeading('结算中心', '查看演示余额和本地模拟账务流水。')}
+    ${pageHeading('结算中心', '查看账户余额和账务流水。')}
     <div class="billing-grid">
       <section class="balance-card">
-        <span>演示可用余额</span><strong>${formatMoney(balance())}</strong>
-        <p>该金额由本地模拟流水计算，不代表真实资金。</p>
+        <span>可用余额</span><strong>${formatMoney(balance())}</strong>
         <button type="button" disabled>真实充值尚未开放</button>
       </section>
       <section class="panel billing-safety">
@@ -451,7 +477,7 @@ function renderBilling(): string {
       </section>
     </div>
     <section class="panel table-panel">
-      <div class="panel-heading"><div><h2>演示流水</h2><p>所有记录仅保存在当前浏览器</p></div></div>
+      <div class="panel-heading"><div><h2>流水</h2><p>所有记录仅保存在当前浏览器</p></div></div>
       <div class="table-scroll"><table class="data-table"><thead><tr><th>日期</th><th>类型</th><th>说明</th><th>金额</th></tr></thead><tbody>
         ${state.ledger.map(entry => `<tr><td>${entry.date}</td><td>${entry.type}</td><td>${escapeHtml(entry.description)}</td><td class="${entry.amount >= 0 ? 'positive' : 'negative'}">${entry.amount >= 0 ? '+' : ''}${formatMoney(entry.amount)}</td></tr>`).join('')}
       </tbody></table></div>
@@ -730,11 +756,7 @@ document.addEventListener('click', event => {
   if (action === 'copy-campaign') copyCampaign(id);
   if (action === 'delete-campaign') deleteCampaign(id);
   if (action === 'export-report') exportReport();
-  if (action === 'reset-demo' && window.confirm('重置全部本地演示数据？')) {
-    state = resetStoredState(DEMO_STATE);
-    renderApp();
-    showToast('演示数据已重置。');
-  }
+  if (action === 'sync-sheet') void syncSheetData(true);
 });
 
 document.addEventListener('submit', event => {
@@ -786,3 +808,4 @@ window.addEventListener('hashchange', () => {
 });
 
 renderApp();
+void syncSheetData();
