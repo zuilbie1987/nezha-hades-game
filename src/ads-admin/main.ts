@@ -1,7 +1,7 @@
 import './style.css';
 import { DEMO_STATE } from './demo-data';
 import { loadSheetData } from './data-source';
-import { campaignsForDateRange, dailySeriesForDateRange } from './metrics';
+import { campaignsForDateRange, dailySeriesForDateRange, filterDailyMetrics } from './metrics';
 import {
   campaignCpa,
   campaignCpc,
@@ -50,6 +50,7 @@ const navigation: Array<{ id: ViewId; label: string; icon: string }> = [
 let state = loadState(DEMO_STATE);
 let campaignQuery = '';
 let campaignStatus = '全部';
+let selectedGroupCampaignId = '';
 let wizardStep = 1;
 let draft = createDraft();
 let dataSourceStatus: 'loading' | 'remote' | 'fallback' = 'loading';
@@ -399,14 +400,45 @@ function campaignActions(campaign: Campaign): string {
 }
 
 function renderGroups(): string {
+  const campaigns = performanceCampaigns();
+  if (!campaigns.some(campaign => campaign.id === selectedGroupCampaignId)) {
+    selectedGroupCampaignId = campaigns[0]?.id ?? '';
+  }
+  const campaign = campaigns.find(item => item.id === selectedGroupCampaignId);
+  if (!campaign) {
+    return `${pageHeading('广告组', '查看单个广告组在所选报告周期内的消耗与每日表现。')}
+      <section class="panel empty-state"><span>⌘</span><h3>暂无广告组</h3><p>创建推广计划后将自动生成默认广告组。</p></section>`;
+  }
+  const dailyRows = filterDailyMetrics(state.dailyMetrics, state.preferences.dateRange)
+    .filter(metric => metric.campaignId === campaign.id)
+    .sort((a, b) => b.date.localeCompare(a.date));
   return `
-    ${pageHeading('广告组', '按受众主题组织广告、出价和投放条件。')}
+    ${pageHeading('广告组', '查看单个广告组在所选报告周期内的消耗与每日表现。')}
     <section class="panel table-panel">
-      <div class="panel-heading"><div><h2>全部广告组</h2></div></div>
+      <div class="toolbar">
+        <label>选择广告组
+          <select id="groupCampaignSelect" aria-label="选择广告组">
+            ${campaigns.map(item => `<option value="${escapeHtml(item.id)}" ${item.id === campaign.id ? 'selected' : ''}>${escapeHtml(item.name)} · 默认组</option>`).join('')}
+          </select>
+        </label>
+        <span class="result-count">所属推广计划：${escapeHtml(campaign.name)} · ${escapeHtml(campaign.region)} · ${campaign.devices.map(escapeHtml).join('、')}</span>
+        <span class="status ${statusClass(campaign.status)}"><i></i>${campaign.status}</span>
+      </div>
+    </section>
+    <section class="metric-grid" aria-label="广告组核心指标">
+      ${metricCard('消耗', formatMoney(campaign.spend), state.preferences.dateRange, 'spend')}
+      ${metricCard('展示量', formatNumber(campaign.impressions), '广告组展示次数', 'impressions')}
+      ${metricCard('点击量', formatNumber(campaign.clicks), `点击率 ${formatPercent(campaignCtr(campaign))}`, 'clicks')}
+      ${metricCard('平均 CPC', formatMoney(campaignCpc(campaign)), `最高 CPC ${formatMoney(campaign.bid)}`, 'cpc')}
+      ${metricCard('转化', formatNumber(campaign.conversions), `平均成本 ${formatMoney(campaignCpa(campaign))}`, 'conversions')}
+      ${metricCard('每日预算', formatMoney(campaign.dailyBudget), campaign.objective, 'wallet')}
+    </section>
+    <section class="panel table-panel">
+      <div class="panel-heading"><div><h2>${escapeHtml(campaign.name)} · 默认组</h2><p>${state.preferences.dateRange}每日消耗明细</p></div></div>
       <div class="table-scroll"><table class="data-table">
-        <thead><tr><th>广告组</th><th>所属推广计划</th><th>目标</th><th>最高 CPC</th><th>地域</th><th>设备</th><th>状态</th></tr></thead>
-        <tbody>${state.campaigns.map(campaign => `
-          <tr><td><strong>${escapeHtml(campaign.name)} · 默认组</strong></td><td>${escapeHtml(campaign.name)}</td><td>${campaign.objective}</td><td>${formatMoney(campaign.bid)}</td><td>${escapeHtml(campaign.region)}</td><td>${campaign.devices.map(escapeHtml).join('、')}</td><td><span class="status ${statusClass(campaign.status)}"><i></i>${campaign.status}</span></td></tr>`).join('')}</tbody>
+        <thead><tr><th>日期</th><th>消耗</th><th>展示</th><th>点击</th><th>CTR</th><th>平均 CPC</th><th>转化</th></tr></thead>
+        <tbody>${dailyRows.length ? dailyRows.map(metric => `
+          <tr><td>${metric.date}</td><td>${formatMoney(metric.spend)}</td><td>${formatNumber(metric.impressions)}</td><td>${formatNumber(metric.clicks)}</td><td>${formatPercent(metric.impressions ? metric.clicks / metric.impressions : 0)}</td><td>${formatMoney(metric.clicks ? metric.spend / metric.clicks : 0)}</td><td>${formatNumber(metric.conversions)}</td></tr>`).join('') : '<tr><td colspan="7">当前周期暂无该广告组的每日数据</td></tr>'}</tbody>
       </table></div>
     </section>`;
 }
@@ -813,6 +845,10 @@ document.addEventListener('change', event => {
   if (target.id === 'dateRange') {
     state.preferences.dateRange = target.value;
     saveState(state);
+    renderApp();
+  }
+  if (target.id === 'groupCampaignSelect') {
+    selectedGroupCampaignId = target.value;
     renderApp();
   }
   if (target.id === 'draftImage' && target instanceof HTMLInputElement && target.files?.[0]) {

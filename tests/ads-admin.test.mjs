@@ -47,6 +47,9 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
   assert.match(dataSource, /fetchSheet\('daily_metrics'/);
   assert.match(dataSource, /fetchSheet\('billing_ledger'/);
   assert.match(main, /entry\.status === 'posted' && entry\.currency === 'USD'/);
+  assert.match(main, /id="groupCampaignSelect"/);
+  assert.match(main, /每日消耗明细/);
+  assert.match(main, /filterDailyMetrics\(state\.dailyMetrics/);
   assert.doesNotMatch(demoData, /WEEKLY_SERIES/);
 });
 
