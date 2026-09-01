@@ -306,8 +306,8 @@ function metricCard(label: string, value: string, detail: string, tone: string):
     </article>`;
 }
 
-function renderTrendChart(): string {
-  const series = dailySeriesForDateRange(state.dailyMetrics, state.preferences.dateRange);
+function renderTrendChart(metrics = state.dailyMetrics, ariaContext = state.preferences.dateRange): string {
+  const series = dailySeriesForDateRange(metrics, state.preferences.dateRange);
   if (!series.some(point => point.spend || point.clicks || point.impressions || point.conversions)) {
     return `<div class="empty-state"><span>⌁</span><h3>当前周期暂无每日数据</h3><p>在 Google Sheet 的 daily_metrics 中添加该日期范围的数据后重新同步。</p></div>`;
   }
@@ -324,7 +324,7 @@ function renderTrendChart(): string {
   const lastX = xForIndex(series.length - 1);
   const labelStep = Math.max(1, Math.ceil(series.length / 7));
   return `
-    <div class="trend-chart" role="img" aria-label="${escapeHtml(state.preferences.dateRange)}每日消耗趋势折线图">
+    <div class="trend-chart" role="img" aria-label="${escapeHtml(ariaContext)}每日消耗趋势折线图">
       <svg viewBox="0 0 ${width} ${height}" aria-hidden="true">
         <defs><linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6d5dfc" stop-opacity=".3"/><stop offset="1" stop-color="#6d5dfc" stop-opacity="0"/></linearGradient></defs>
         <line x1="24" y1="45" x2="656" y2="45"/><line x1="24" y1="105" x2="656" y2="105"/><line x1="24" y1="165" x2="656" y2="165"/>
@@ -412,6 +412,7 @@ function renderGroups(): string {
   const dailyRows = filterDailyMetrics(state.dailyMetrics, state.preferences.dateRange)
     .filter(metric => metric.campaignId === campaign.id)
     .sort((a, b) => b.date.localeCompare(a.date));
+  const groupMetrics = state.dailyMetrics.filter(metric => metric.campaignId === campaign.id);
   return `
     ${pageHeading('广告组', '查看单个广告组在所选报告周期内的消耗与每日表现。')}
     <section class="panel table-panel">
@@ -432,6 +433,13 @@ function renderGroups(): string {
       ${metricCard('平均 CPC', formatMoney(campaignCpc(campaign)), `最高 CPC ${formatMoney(campaign.bid)}`, 'cpc')}
       ${metricCard('转化', formatNumber(campaign.conversions), `平均成本 ${formatMoney(campaignCpa(campaign))}`, 'conversions')}
       ${metricCard('每日预算', formatMoney(campaign.dailyBudget), campaign.objective, 'wallet')}
+    </section>
+    <section class="panel chart-panel group-spend-chart">
+      <div class="panel-heading">
+        <div><h2>每日消耗趋势</h2><p>${escapeHtml(campaign.name)} · 默认组 · ${state.preferences.dateRange}</p></div>
+        <span class="legend"><i></i> 消耗</span>
+      </div>
+      ${renderTrendChart(groupMetrics, `${campaign.name}默认广告组${state.preferences.dateRange}`)}
     </section>
     <section class="panel table-panel">
       <div class="panel-heading"><div><h2>${escapeHtml(campaign.name)} · 默认组</h2><p>${state.preferences.dateRange}每日消耗明细</p></div></div>

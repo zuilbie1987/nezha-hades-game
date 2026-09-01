@@ -50,6 +50,8 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
   assert.match(billing, /entry\.status === 'posted' && entry\.currency === 'USD'/);
   assert.match(main, /id="groupCampaignSelect"/);
   assert.match(main, /每日消耗明细/);
+  assert.match(main, /group-spend-chart/);
+  assert.match(main, /renderTrendChart\(groupMetrics/);
   assert.match(main, /filterDailyMetrics\(state\.dailyMetrics/);
   assert.match(main, /id="billingCampaignFilter"/);
   assert.match(main, /项目资金概览/);
