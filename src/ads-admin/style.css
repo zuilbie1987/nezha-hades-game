@@ -183,6 +183,7 @@ a { color: inherit; }
 .report-summary span { color: var(--muted); font-size: 10px; }
 .report-summary strong { margin-top: 7px; color: #262f42; font-size: 20px; }
 .report-summary + .chart-panel { margin-bottom: 18px; }
+.billing-projects { margin-bottom: 18px; }
 .conversion-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, .7fr); gap: 18px; }
 .conversion-form-panel { padding: 22px; }
 .stacked-form, .wizard-form { display: grid; gap: 15px; margin-top: 22px; }

@@ -1,4 +1,5 @@
 import './style.css';
+import { billingTotals, campaignBillingSummaries, UNASSIGNED_CAMPAIGN_ID } from './billing';
 import { DEMO_STATE } from './demo-data';
 import { loadSheetData } from './data-source';
 import { campaignsForDateRange, dailySeriesForDateRange, filterDailyMetrics } from './metrics';
@@ -51,6 +52,7 @@ let state = loadState(DEMO_STATE);
 let campaignQuery = '';
 let campaignStatus = '全部';
 let selectedGroupCampaignId = '';
+let billingCampaignFilter = 'all';
 let wizardStep = 1;
 let draft = createDraft();
 let dataSourceStatus: 'loading' | 'remote' | 'fallback' = 'loading';
@@ -141,9 +143,7 @@ function aggregate() {
 }
 
 function balance(): number {
-  return state.ledger
-    .filter(entry => entry.status === 'posted' && entry.currency === 'USD')
-    .reduce((sum, entry) => sum + entry.amount, 0);
+  return billingTotals(state.ledger).balance;
 }
 
 function ledgerStatusLabel(status: string): string {
@@ -525,6 +525,21 @@ function renderConversions(): string {
 }
 
 function renderBilling(): string {
+  const campaignIds = new Set(state.campaigns.map(campaign => campaign.id));
+  const hasUnassignedLedger = state.ledger.some(entry => !entry.campaignId || !campaignIds.has(entry.campaignId));
+  if (billingCampaignFilter !== 'all' && billingCampaignFilter !== UNASSIGNED_CAMPAIGN_ID && !campaignIds.has(billingCampaignFilter)) {
+    billingCampaignFilter = 'all';
+  }
+  const totals = billingTotals(state.ledger);
+  const summaries = campaignBillingSummaries(state.campaigns, state.ledger);
+  const unassigned = summaries.find(summary => summary.campaignId === UNASSIGNED_CAMPAIGN_ID);
+  const fundedProjects = summaries.filter(summary => summary.campaignId !== UNASSIGNED_CAMPAIGN_ID && summary.transactionCount > 0).length;
+  const filteredLedger = state.ledger.filter(entry => {
+    if (billingCampaignFilter === 'all') return true;
+    if (billingCampaignFilter === UNASSIGNED_CAMPAIGN_ID) return !entry.campaignId || !campaignIds.has(entry.campaignId);
+    return entry.campaignId === billingCampaignFilter;
+  });
+  const campaignName = (campaignId?: string) => state.campaigns.find(campaign => campaign.id === campaignId)?.name ?? '未分配 / 账户级';
   return `
     ${pageHeading('结算中心', '查看账户余额和账务流水。')}
     <div class="billing-grid">
@@ -536,10 +551,29 @@ function renderBilling(): string {
         <span class="shield">◇</span><div><h2>资金功能保持锁定</h2><p>现有静态 Hosting 无法安全处理充值、退款、原子扣费和发票。接入服务端账务系统前，页面不会收集任何支付信息。</p></div>
       </section>
     </div>
+    <section class="report-summary panel">
+      <div><span>累计入账</span><strong>${formatMoney(totals.credited)}</strong></div>
+      <div><span>累计出账</span><strong>${formatMoney(totals.spent)}</strong></div>
+      <div><span>已分配项目</span><strong>${formatNumber(fundedProjects)}</strong></div>
+      <div><span>未分配余额</span><strong>${formatMoney(unassigned?.balance ?? 0)}</strong></div>
+    </section>
+    <section class="panel table-panel billing-projects">
+      <div class="panel-heading"><div><h2>项目资金概览</h2><p>仅统计已入账的美元流水</p></div></div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>广告项目</th><th>累计入账</th><th>累计消耗</th><th>项目余额</th><th>已入账流水</th></tr></thead><tbody>
+        ${summaries.map(summary => `<tr><td><strong>${escapeHtml(summary.campaignName)}</strong><small>${summary.campaignId === UNASSIGNED_CAMPAIGN_ID ? '未关联 campaign_id' : escapeHtml(summary.campaignId)}</small></td><td class="positive">+${formatMoney(summary.credited)}</td><td class="negative">-${formatMoney(summary.spent)}</td><td class="${summary.balance >= 0 ? 'positive' : 'negative'}">${formatMoney(summary.balance)}</td><td>${formatNumber(summary.transactionCount)}</td></tr>`).join('')}
+      </tbody></table></div>
+    </section>
     <section class="panel table-panel">
       <div class="panel-heading"><div><h2>流水</h2><p>${dataSourceStatus === 'remote' ? '流水数据来自 Google Sheet' : '当前显示本地备用流水'}</p></div></div>
-      <div class="table-scroll"><table class="data-table"><thead><tr><th>日期</th><th>类型</th><th>说明</th><th>状态</th><th>金额</th></tr></thead><tbody>
-        ${state.ledger.length ? state.ledger.map(entry => `<tr><td>${escapeHtml(entry.date)}</td><td>${escapeHtml(ledgerTypeLabel(entry.type))}</td><td>${escapeHtml(entry.description)}</td><td><span class="status ${statusClass(ledgerStatusLabel(entry.status))}"><i></i>${ledgerStatusLabel(entry.status)}</span></td><td class="${entry.amount >= 0 ? 'positive' : 'negative'}">${entry.amount >= 0 ? '+' : ''}${formatMoney(entry.amount)}</td></tr>`).join('') : '<tr><td colspan="5">暂无流水</td></tr>'}
+      <div class="toolbar"><label>筛选广告项目
+        <select id="billingCampaignFilter" aria-label="筛选广告项目">
+          <option value="all">全部项目</option>
+          ${state.campaigns.map(campaign => `<option value="${escapeHtml(campaign.id)}" ${billingCampaignFilter === campaign.id ? 'selected' : ''}>${escapeHtml(campaign.name)}</option>`).join('')}
+          ${hasUnassignedLedger ? `<option value="${UNASSIGNED_CAMPAIGN_ID}" ${billingCampaignFilter === UNASSIGNED_CAMPAIGN_ID ? 'selected' : ''}>未分配 / 账户级</option>` : ''}
+        </select>
+      </label><span class="result-count">${filteredLedger.length} 条流水</span></div>
+      <div class="table-scroll"><table class="data-table"><thead><tr><th>日期</th><th>广告项目</th><th>类型</th><th>说明</th><th>状态</th><th>金额</th></tr></thead><tbody>
+        ${filteredLedger.length ? filteredLedger.map(entry => `<tr><td>${escapeHtml(entry.date)}</td><td>${escapeHtml(campaignName(entry.campaignId))}</td><td>${escapeHtml(ledgerTypeLabel(entry.type))}</td><td>${escapeHtml(entry.description)}</td><td><span class="status ${statusClass(ledgerStatusLabel(entry.status))}"><i></i>${ledgerStatusLabel(entry.status)}</span></td><td class="${entry.amount >= 0 ? 'positive' : 'negative'}">${entry.amount >= 0 ? '+' : ''}${formatMoney(entry.amount)}</td></tr>`).join('') : '<tr><td colspan="6">暂无流水</td></tr>'}
       </tbody></table></div>
     </section>`;
 }
@@ -849,6 +883,10 @@ document.addEventListener('change', event => {
   }
   if (target.id === 'groupCampaignSelect') {
     selectedGroupCampaignId = target.value;
+    renderApp();
+  }
+  if (target.id === 'billingCampaignFilter') {
+    billingCampaignFilter = target.value;
     renderApp();
   }
   if (target.id === 'draftImage' && target instanceof HTMLInputElement && target.files?.[0]) {

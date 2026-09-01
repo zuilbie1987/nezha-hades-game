@@ -17,11 +17,12 @@ test('ads admin is a separate noindex Vite page', async () => {
 });
 
 test('ads admin uses Google Sheet data with a local fallback', async () => {
-  const [main, store, demoData, dataSource] = await Promise.all([
+  const [main, store, demoData, dataSource, billing] = await Promise.all([
     readFile(new URL('src/ads-admin/main.ts', projectRoot), 'utf8'),
     readFile(new URL('src/ads-admin/store.ts', projectRoot), 'utf8'),
     readFile(new URL('src/ads-admin/demo-data.ts', projectRoot), 'utf8'),
     readFile(new URL('src/ads-admin/data-source.ts', projectRoot), 'utf8'),
+    readFile(new URL('src/ads-admin/billing.ts', projectRoot), 'utf8'),
   ]);
 
   assert.match(store, /const STORAGE_KEY = 'adsAdmin:v1'/);
@@ -46,10 +47,12 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
   assert.match(dataSource, /fetchSheet\('campaigns'/);
   assert.match(dataSource, /fetchSheet\('daily_metrics'/);
   assert.match(dataSource, /fetchSheet\('billing_ledger'/);
-  assert.match(main, /entry\.status === 'posted' && entry\.currency === 'USD'/);
+  assert.match(billing, /entry\.status === 'posted' && entry\.currency === 'USD'/);
   assert.match(main, /id="groupCampaignSelect"/);
   assert.match(main, /每日消耗明细/);
   assert.match(main, /filterDailyMetrics\(state\.dailyMetrics/);
+  assert.match(main, /id="billingCampaignFilter"/);
+  assert.match(main, /项目资金概览/);
   assert.doesNotMatch(demoData, /WEEKLY_SERIES/);
 });
 
@@ -66,6 +69,34 @@ test('billing ledger rows map, deduplicate and protect pending balances', async 
   assert.equal(ledger[0].status, 'pending');
   assert.equal(ledger[1].amount, 4900);
   assert.equal(ledger[1].currency, 'USD');
+});
+
+test('billing separates credited and spent amounts by campaign', async () => {
+  const { billingTotals, campaignBillingSummaries, UNASSIGNED_CAMPAIGN_ID } = await import('../src/ads-admin/billing.ts');
+  const campaigns = [
+    { id: 'cmp_a', name: 'A项目' },
+    { id: 'cmp_b', name: 'B项目' },
+  ];
+  const ledger = [
+    { id: 't1', campaignId: 'cmp_a', amount: 1000, currency: 'USD', status: 'posted' },
+    { id: 't2', campaignId: 'cmp_a', amount: -320, currency: 'USD', status: 'posted' },
+    { id: 't3', campaignId: 'cmp_b', amount: 500, currency: 'USD', status: 'pending' },
+    { id: 't4', amount: 200, currency: 'USD', status: 'posted' },
+  ];
+  const totals = billingTotals(ledger);
+  const summaries = campaignBillingSummaries(campaigns, ledger);
+  const projectA = summaries.find(summary => summary.campaignId === 'cmp_a');
+  const unassigned = summaries.find(summary => summary.campaignId === UNASSIGNED_CAMPAIGN_ID);
+
+  assert.deepEqual(
+    { credited: totals.credited, spent: totals.spent, balance: totals.balance },
+    { credited: 1200, spent: 320, balance: 880 },
+  );
+  assert.deepEqual(
+    { credited: projectA.credited, spent: projectA.spent, balance: projectA.balance },
+    { credited: 1000, spent: 320, balance: 680 },
+  );
+  assert.equal(unassigned.balance, 200);
 });
 
 test('Google Sheet rows preserve campaign configuration and daily metrics', async () => {
