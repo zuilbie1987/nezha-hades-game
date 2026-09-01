@@ -8,6 +8,7 @@ export default defineConfig({
       input: {
         main: './index.html',
         harmonica: './harmonica.html',
+        adsAdmin: './ads-admin.html',
       },
     },
   },
