@@ -2,7 +2,7 @@ import './style.css';
 import { billingTotals, campaignBillingSummaries, UNASSIGNED_CAMPAIGN_ID } from './billing';
 import { DEMO_STATE } from './demo-data';
 import { loadSheetData } from './data-source';
-import { campaignsForDateRange, dailySeriesForDateRange, filterDailyMetrics } from './metrics';
+import { campaignsForDateRange, dailySeriesForDateRange, filterDailyMetrics, platformSeriesForDateRange } from './metrics';
 import {
   campaignCpa,
   campaignCpc,
@@ -12,6 +12,13 @@ import {
   saveState,
 } from './store';
 import type { AdCreative, Campaign, CampaignObjective } from './store';
+
+const adPlatforms = [
+  { key: 'meta', label: 'Meta' },
+  { key: 'google', label: 'Google' },
+  { key: 'tiktok', label: 'TikTok' },
+  { key: 'kuai', label: 'Kuai' },
+] as const;
 
 type ViewId = 'overview' | 'campaigns' | 'groups' | 'ads' | 'reports' | 'conversions' | 'billing';
 
@@ -341,6 +348,30 @@ function renderTrendChart(metrics = state.dailyMetrics, ariaContext = state.pref
     </div>`;
 }
 
+function renderPlatformTrendChart(metrics: typeof state.dailyMetrics, ariaContext: string): string {
+  const series = platformSeriesForDateRange(metrics, state.preferences.dateRange);
+  const maxSpend = Math.max(1, ...series.flatMap(point => adPlatforms.map(platform => point[platform.key])));
+  const width = 680;
+  const height = 220;
+  const xForIndex = (index: number) => series.length === 1 ? width / 2 : 24 + index * ((width - 48) / (series.length - 1));
+  const yForSpend = (spend: number) => height - 34 - (spend / maxSpend) * (height - 70);
+  const labelStep = Math.max(1, Math.ceil(series.length / 7));
+  return `
+    <div class="trend-chart platform-trend-chart" role="img" aria-label="${escapeHtml(ariaContext)}各广告平台每日消耗趋势折线图">
+      <svg viewBox="0 0 ${width} ${height}" aria-hidden="true">
+        <line x1="24" y1="45" x2="656" y2="45"/><line x1="24" y1="105" x2="656" y2="105"/><line x1="24" y1="165" x2="656" y2="165"/>
+        ${adPlatforms.map(platform => {
+          const points = series.map((point, index) => `${xForIndex(index)},${yForSpend(point[platform.key])}`).join(' ');
+          return `<polyline class="platform-line ${platform.key}" points="${points}"/>${series.map((point, index) => `<circle class="platform-point ${platform.key}" cx="${xForIndex(index)}" cy="${yForSpend(point[platform.key])}" r="3"><title>${point.date} · ${platform.label}：${formatMoney(point[platform.key])}</title></circle>`).join('')}`;
+        }).join('')}
+        ${series.map((point, index) => {
+          const label = `${Number(point.date.slice(5, 7))}/${Number(point.date.slice(8, 10))}`;
+          return index % labelStep === 0 || index === series.length - 1 ? `<text x="${xForIndex(index)}" y="210">${label}</text>` : '';
+        }).join('')}
+      </svg>
+    </div>`;
+}
+
 function renderCampaigns(): string {
   const statuses = ['全部', '投放中', '预算受限', '审核中', '已暂停', '草稿', '已结束'];
   const filtered = performanceCampaigns().filter(campaign => {
@@ -413,6 +444,11 @@ function renderGroups(): string {
     .filter(metric => metric.campaignId === campaign.id)
     .sort((a, b) => b.date.localeCompare(a.date));
   const groupMetrics = state.dailyMetrics.filter(metric => metric.campaignId === campaign.id);
+  const platformTotals = adPlatforms.map(platform => ({
+    ...platform,
+    spend: dailyRows.reduce((sum, metric) => sum + (metric.platformSpend?.[platform.key] ?? 0), 0),
+  }));
+  const hasPlatformData = platformTotals.some(platform => platform.spend > 0);
   return `
     ${pageHeading('广告组', '查看单个广告组在所选报告周期内的消耗与每日表现。')}
     <section class="panel table-panel">
@@ -434,19 +470,22 @@ function renderGroups(): string {
       ${metricCard('转化', formatNumber(campaign.conversions), `平均成本 ${formatMoney(campaignCpa(campaign))}`, 'conversions')}
       ${metricCard('每日预算', formatMoney(campaign.dailyBudget), campaign.objective, 'wallet')}
     </section>
+    <section class="platform-spend-grid" aria-label="各广告平台消耗">
+      ${platformTotals.map(platform => `<article class="platform-spend-card ${platform.key}"><span>${platform.label}</span><strong>${formatMoney(platform.spend)}</strong><small>${state.preferences.dateRange}消耗</small></article>`).join('')}
+    </section>
     <section class="panel chart-panel group-spend-chart">
       <div class="panel-heading">
-        <div><h2>每日消耗趋势</h2><p>${escapeHtml(campaign.name)} · 默认组 · ${state.preferences.dateRange}</p></div>
-        <span class="legend"><i></i> 消耗</span>
+        <div><h2>各平台每日消耗趋势</h2><p>${escapeHtml(campaign.name)} · 默认组 · ${state.preferences.dateRange}${hasPlatformData ? '' : ' · 当前数据尚未区分平台'}</p></div>
+        ${hasPlatformData ? `<div class="platform-legends">${adPlatforms.map(platform => `<span class="platform-legend ${platform.key}"><i></i>${platform.label}</span>`).join('')}</div>` : '<span class="legend"><i></i> 未分平台总消耗</span>'}
       </div>
-      ${renderTrendChart(groupMetrics, `${campaign.name}默认广告组${state.preferences.dateRange}`)}
+      ${hasPlatformData ? renderPlatformTrendChart(groupMetrics, `${campaign.name}默认广告组${state.preferences.dateRange}`) : renderTrendChart(groupMetrics, `${campaign.name}默认广告组${state.preferences.dateRange}未分平台`)}
     </section>
     <section class="panel table-panel">
       <div class="panel-heading"><div><h2>${escapeHtml(campaign.name)} · 默认组</h2><p>${state.preferences.dateRange}每日消耗明细</p></div></div>
       <div class="table-scroll"><table class="data-table">
-        <thead><tr><th>日期</th><th>消耗</th><th>展示</th><th>点击</th><th>CTR</th><th>平均 CPC</th><th>转化</th></tr></thead>
+        <thead><tr><th>日期</th><th>总消耗</th><th>Meta</th><th>Google</th><th>TikTok</th><th>Kuai</th><th>展示</th><th>点击</th><th>CTR</th><th>平均 CPC</th><th>转化</th></tr></thead>
         <tbody>${dailyRows.length ? dailyRows.map(metric => `
-          <tr><td>${metric.date}</td><td>${formatMoney(metric.spend)}</td><td>${formatNumber(metric.impressions)}</td><td>${formatNumber(metric.clicks)}</td><td>${formatPercent(metric.impressions ? metric.clicks / metric.impressions : 0)}</td><td>${formatMoney(metric.clicks ? metric.spend / metric.clicks : 0)}</td><td>${formatNumber(metric.conversions)}</td></tr>`).join('') : '<tr><td colspan="7">当前周期暂无该广告组的每日数据</td></tr>'}</tbody>
+          <tr><td>${metric.date}</td><td>${formatMoney(metric.spend)}</td><td>${formatMoney(metric.platformSpend?.meta ?? 0)}</td><td>${formatMoney(metric.platformSpend?.google ?? 0)}</td><td>${formatMoney(metric.platformSpend?.tiktok ?? 0)}</td><td>${formatMoney(metric.platformSpend?.kuai ?? 0)}</td><td>${formatNumber(metric.impressions)}</td><td>${formatNumber(metric.clicks)}</td><td>${formatPercent(metric.impressions ? metric.clicks / metric.impressions : 0)}</td><td>${formatMoney(metric.clicks ? metric.spend / metric.clicks : 0)}</td><td>${formatNumber(metric.conversions)}</td></tr>`).join('') : '<tr><td colspan="11">当前周期暂无该广告组的每日数据</td></tr>'}</tbody>
       </table></div>
     </section>`;
 }

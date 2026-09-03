@@ -28,7 +28,15 @@ export type DailyMetric = {
   clicks: number;
   conversions: number;
   spend: number;
+  platformSpend: PlatformSpend;
   updatedAt: string;
+};
+
+export type PlatformSpend = {
+  meta: number;
+  google: number;
+  tiktok: number;
+  kuai: number;
 };
 
 export type AdCreative = {
@@ -93,7 +101,15 @@ export function loadState(fallback: AdsAdminState): AdsAdminState {
     }
     return {
       ...parsed,
-      dailyMetrics: Array.isArray(parsed.dailyMetrics) ? parsed.dailyMetrics : [],
+      dailyMetrics: Array.isArray(parsed.dailyMetrics) ? parsed.dailyMetrics.map(metric => ({
+        ...metric,
+        platformSpend: {
+          meta: metric.platformSpend?.meta ?? 0,
+          google: metric.platformSpend?.google ?? 0,
+          tiktok: metric.platformSpend?.tiktok ?? 0,
+          kuai: metric.platformSpend?.kuai ?? 0,
+        },
+      })) : [],
       ledger: Array.isArray(parsed.ledger) ? parsed.ledger.map(entry => ({
         ...entry,
         currency: entry.currency ?? 'USD',

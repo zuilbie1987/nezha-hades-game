@@ -1,4 +1,4 @@
-import type { Campaign, DailyMetric } from './store';
+import type { Campaign, DailyMetric, PlatformSpend } from './store';
 
 export type DateRangeLabel = '今天' | '过去 7 天' | '过去 30 天' | '本月';
 
@@ -11,6 +11,7 @@ export type DailySeriesPoint = {
 };
 
 type MetricTotals = Omit<DailySeriesPoint, 'date'>;
+export type DailyPlatformSeriesPoint = PlatformSpend & { date: string };
 
 function dateKey(date: Date): string {
   const year = date.getFullYear();
@@ -40,6 +41,10 @@ export function filterDailyMetrics(metrics: DailyMetric[], range: string, today 
 
 function emptyTotals(): MetricTotals {
   return { spend: 0, impressions: 0, clicks: 0, conversions: 0 };
+}
+
+function emptyPlatformSpend(): PlatformSpend {
+  return { meta: 0, google: 0, tiktok: 0, kuai: 0 };
 }
 
 export function campaignsForDateRange(campaigns: Campaign[], metrics: DailyMetric[], range: string, today = new Date()): Campaign[] {
@@ -77,4 +82,18 @@ export function dailySeriesForDateRange(metrics: DailyMetric[], range: string, t
     cursor.setDate(cursor.getDate() + 1);
   }
   return series;
+}
+
+export function platformSeriesForDateRange(metrics: DailyMetric[], range: string, today = new Date()): DailyPlatformSeriesPoint[] {
+  const dates = dailySeriesForDateRange(metrics, range, today).map(point => point.date);
+  const totals = new Map<string, PlatformSpend>();
+  filterDailyMetrics(metrics, range, today).forEach(metric => {
+    const current = totals.get(metric.date) ?? emptyPlatformSpend();
+    current.meta += metric.platformSpend?.meta ?? 0;
+    current.google += metric.platformSpend?.google ?? 0;
+    current.tiktok += metric.platformSpend?.tiktok ?? 0;
+    current.kuai += metric.platformSpend?.kuai ?? 0;
+    totals.set(metric.date, current);
+  });
+  return dates.map(date => ({ date, ...(totals.get(date) ?? emptyPlatformSpend()) }));
 }

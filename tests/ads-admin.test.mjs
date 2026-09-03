@@ -51,7 +51,12 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
   assert.match(main, /id="groupCampaignSelect"/);
   assert.match(main, /每日消耗明细/);
   assert.match(main, /group-spend-chart/);
-  assert.match(main, /renderTrendChart\(groupMetrics/);
+  assert.match(main, /renderPlatformTrendChart\(groupMetrics/);
+  assert.match(main, /Meta.*Google.*TikTok.*Kuai/);
+  assert.match(dataSource, /meta_spend/);
+  assert.match(dataSource, /google_spend/);
+  assert.match(dataSource, /tiktok_spend/);
+  assert.match(dataSource, /kuai_spend/);
   assert.match(main, /filterDailyMetrics\(state\.dailyMetrics/);
   assert.match(main, /id="billingCampaignFilter"/);
   assert.match(main, /项目资金概览/);
@@ -125,6 +130,23 @@ test('Google Sheet rows preserve campaign configuration and daily metrics', asyn
   assert.deepEqual(
     { spend: metric.spend, impressions: metric.impressions, clicks: metric.clicks, conversions: metric.conversions },
     { spend: 12.5, impressions: 1000, clicks: 25, conversions: 2 },
+  );
+});
+
+test('daily metrics use platform spend fields when supplied', async () => {
+  const { mapSheetDailyMetrics } = await import('../src/ads-admin/data-source.ts');
+  const { platformSeriesForDateRange } = await import('../src/ads-admin/metrics.ts');
+  const [metric] = mapSheetDailyMetrics([{
+    date: '2026-09-01', campaign_id: 'cmp_001', cost: '999',
+    meta_spend: '10.25', google_spend: '$20', tiktok_spend: '5.50', kuai_spend: '4.25',
+  }]);
+
+  assert.deepEqual(metric.platformSpend, { meta: 10.25, google: 20, tiktok: 5.5, kuai: 4.25 });
+  assert.equal(metric.spend, 40);
+  const point = platformSeriesForDateRange([metric], '过去 7 天', new Date(2026, 8, 1, 12)).find(item => item.date === metric.date);
+  assert.deepEqual(
+    { meta: point.meta, google: point.google, tiktok: point.tiktok, kuai: point.kuai },
+    metric.platformSpend,
   );
 });
 

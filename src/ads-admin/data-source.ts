@@ -100,6 +100,14 @@ export function mapSheetDailyMetrics(rows: SheetRow[], updatedAt = ''): DailyMet
     const campaignId = String(row.campaign_id ?? row.campaignId ?? '').trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !campaignId) return;
     const uniqueKey = `${date}:${campaignId}`;
+    const platformSpend = {
+      meta: toNumber(row.meta_spend ?? row.metaSpend),
+      google: toNumber(row.google_spend ?? row.googleSpend),
+      tiktok: toNumber(row.tiktok_spend ?? row.tiktokSpend),
+      kuai: toNumber(row.kuai_spend ?? row.kuaiSpend),
+    };
+    const hasPlatformSpend = ['meta_spend', 'metaSpend', 'google_spend', 'googleSpend', 'tiktok_spend', 'tiktokSpend', 'kuai_spend', 'kuaiSpend']
+      .some(field => String(row[field] ?? '').trim() !== '');
     metrics.set(uniqueKey, {
       id: String(row.metric_id ?? row.id ?? `${date}_${campaignId}`).trim(),
       date,
@@ -107,7 +115,8 @@ export function mapSheetDailyMetrics(rows: SheetRow[], updatedAt = ''): DailyMet
       impressions: toNumber(row.impressions),
       clicks: toNumber(row.clicks),
       conversions: toNumber(row.conversions),
-      spend: toNumber(row.cost ?? row.spend),
+      spend: hasPlatformSpend ? Object.values(platformSpend).reduce((sum, amount) => sum + amount, 0) : toNumber(row.cost ?? row.spend),
+      platformSpend,
       updatedAt: String(row.updated_at ?? row.updatedAt ?? updatedAt),
     });
   });
