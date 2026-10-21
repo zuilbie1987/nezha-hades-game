@@ -71,6 +71,7 @@ a { color: inherit; }
   display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--border); border-radius: 9px; background: #fff; color: #4c5568;
 }
 .notification { color: #ef6a6a; font-size: 8px; }
+.language-button { width: auto; min-width: 42px; padding: 0 10px; font-size: 10px; font-weight: 700; }
 .menu-button { display: none; margin-right: 10px; }
 .content { width: min(1540px, 100%); margin: 0 auto; padding: 34px; }
 .page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 26px; }

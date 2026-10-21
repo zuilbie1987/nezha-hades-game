@@ -18,17 +18,22 @@ test('ads admin is a separate noindex Vite page', async () => {
 });
 
 test('ads admin uses Google Sheet data with a local fallback', async () => {
-  const [main, store, demoData, dataSource, billing] = await Promise.all([
+  const [main, store, demoData, dataSource, billing, i18n] = await Promise.all([
     readFile(new URL('src/ads-admin/main.ts', projectRoot), 'utf8'),
     readFile(new URL('src/ads-admin/store.ts', projectRoot), 'utf8'),
     readFile(new URL('src/ads-admin/demo-data.ts', projectRoot), 'utf8'),
     readFile(new URL('src/ads-admin/data-source.ts', projectRoot), 'utf8'),
     readFile(new URL('src/ads-admin/billing.ts', projectRoot), 'utf8'),
+    readFile(new URL('src/ads-admin/i18n.ts', projectRoot), 'utf8'),
   ]);
 
   assert.match(store, /const STORAGE_KEY = 'adsAdmin:v1'/);
   assert.match(store, /schemaVersion: 1/);
   assert.match(main, /同步 Google Sheet/);
+  assert.match(main, /data-action="toggle-language"/);
+  assert.match(main, /localizeElement\(app, language\)/);
+  assert.match(i18n, /adsAdmin:language/);
+  assert.match(i18n, /Spark Ads · Ads Management/);
   assert.match(main, /loadSheetData/);
   assert.match(store, /dailyMetrics: DailyMetric\[\]/);
   assert.match(main, /currency: 'USD'/);
@@ -65,6 +70,16 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
   assert.match(main, /id="billingCampaignFilter"/);
   assert.match(main, /项目资金概览/);
   assert.doesNotMatch(demoData, /WEEKLY_SERIES/);
+});
+
+test('ads admin translations preserve Chinese and translate core English UI', async () => {
+  const { translateText } = await import('../src/ads-admin/i18n.ts');
+  assert.equal(translateText('推广计划', 'zh'), '推广计划');
+  assert.equal(translateText('推广计划', 'en'), 'Campaigns');
+  assert.equal(translateText(' 过去 7 天消耗 ', 'en'), ' Last 7 days spend ');
+  assert.equal(translateText('未分配 / 账户级', 'en'), 'Unallocated / account level');
+  assert.equal(translateText('5 个推广计划正在消耗预算', 'en'), '5 active campaigns spending budget');
+  assert.equal(translateText('网站访问 · US', 'en'), 'Website traffic · US');
 });
 
 test('billing ledger rows map, deduplicate and protect pending balances', async () => {

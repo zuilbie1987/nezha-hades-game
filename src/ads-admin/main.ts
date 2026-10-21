@@ -2,6 +2,7 @@ import './style.css';
 import { billingTotals, campaignBillingSummaries, UNASSIGNED_CAMPAIGN_ID } from './billing';
 import { DEMO_STATE } from './demo-data';
 import { loadSheetData } from './data-source';
+import { getInitialLanguage, localizeDocument, localizeElement, saveLanguage, translateText } from './i18n';
 import { campaignsForDateRange, dailySeriesForDateRange, filterDailyMetrics, platformSeriesForDateRange } from './metrics';
 import {
   campaignCpa,
@@ -56,6 +57,7 @@ const navigation: Array<{ id: ViewId; label: string; icon: string }> = [
 ];
 
 let state = loadState(DEMO_STATE);
+let language = getInitialLanguage();
 let campaignQuery = '';
 let campaignStatus = '全部';
 let selectedGroupCampaignId = '';
@@ -110,7 +112,7 @@ function formatMoney(value: number): string {
 }
 
 function formatNumber(value: number): string {
-  return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat(language === 'en' ? 'en-US' : 'zh-CN', { maximumFractionDigits: 0 }).format(value);
 }
 
 function formatPercent(value: number): string {
@@ -209,6 +211,7 @@ function renderApp(): void {
                 )).join('')}
               </select>
             </label>
+            <button class="icon-button language-button" type="button" data-action="toggle-language" data-i18n-skip aria-label="${language === 'zh' ? 'Switch to English' : '切换为中文'}">${language === 'zh' ? 'EN' : '中文'}</button>
             <button class="icon-button" type="button" aria-label="帮助">?</button>
             <button class="icon-button notification" type="button" aria-label="通知">●</button>
           </div>
@@ -220,6 +223,8 @@ function renderApp(): void {
     </div>
     <dialog class="campaign-dialog" id="campaignDialog" aria-labelledby="wizardTitle"></dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>`;
+  localizeElement(app, language);
+  localizeDocument(language);
 }
 
 async function syncSheetData(showFeedback = false): Promise<void> {
@@ -656,6 +661,7 @@ function renderWizard(error = ''): void {
         </footer>
       </section>
     </div>`;
+  localizeElement(dialog, language);
 }
 
 function wizardStepContent(): string {
@@ -829,7 +835,10 @@ function copyCampaign(id: string): void {
 function deleteCampaign(id: string): void {
   const campaign = state.campaigns.find(item => item.id === id);
   if (!campaign || campaign.status !== '草稿') return;
-  if (!window.confirm(`删除草稿“${campaign.name}”？此操作只影响当前浏览器。`)) return;
+  const confirmation = language === 'en'
+    ? `Delete draft “${campaign.name}”? This only affects the current browser.`
+    : `删除草稿“${campaign.name}”？此操作只影响当前浏览器。`;
+  if (!window.confirm(confirmation)) return;
   state.campaigns = state.campaigns.filter(item => item.id !== id);
   state.ads = state.ads.filter(ad => ad.campaignId !== id);
   saveState(state);
@@ -838,11 +847,11 @@ function deleteCampaign(id: string): void {
 }
 
 function exportReport(): void {
-  const headers = ['推广计划', '状态', '目标', '消耗', '展示', '点击', 'CTR', '平均CPC', '转化'];
+  const headers = ['推广计划', '状态', '目标', '消耗', '展示', '点击', 'CTR', '平均CPC', '转化'].map(header => translateText(header, language));
   const rows = performanceCampaigns().map(campaign => [
     campaign.name,
-    campaign.status,
-    campaign.objective,
+    translateText(campaign.status, language),
+    translateText(campaign.objective, language),
     campaign.spend.toFixed(2),
     campaign.impressions,
     campaign.clicks,
@@ -864,7 +873,7 @@ function exportReport(): void {
 function showToast(message: string): void {
   const toast = document.querySelector<HTMLDivElement>('#toast');
   if (!toast) return;
-  toast.textContent = message;
+  toast.textContent = translateText(message, language);
   toast.classList.add('show');
   window.setTimeout(() => toast.classList.remove('show'), 2600);
 }
@@ -876,6 +885,11 @@ document.addEventListener('click', event => {
   const id = target.dataset.id ?? '';
   if (action === 'open-menu') document.body.classList.add('menu-open');
   if (action === 'close-menu') document.body.classList.remove('menu-open');
+  if (action === 'toggle-language') {
+    language = language === 'zh' ? 'en' : 'zh';
+    saveLanguage(language);
+    renderApp();
+  }
   if (action === 'new-campaign') openWizard();
   if (action === 'close-wizard') document.querySelector<HTMLDialogElement>('#campaignDialog')?.close();
   if (action === 'wizard-back' && wizardStep > 1) {
