@@ -14,6 +14,7 @@ test('ads admin is a separate noindex Vite page', async () => {
   assert.match(html, /id="adsAdminApp"/);
   assert.match(html, /src="\/src\/ads-admin\/main\.ts"/);
   assert.match(viteConfig, /adsAdmin: '\.\/ads-admin\.html'/);
+  assert.doesNotMatch(html, /演示|Demo/i);
 });
 
 test('ads admin uses Google Sheet data with a local fallback', async () => {
@@ -36,6 +37,8 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
   assert.doesNotMatch(main, /比较推广计划表现并导出演示数据/);
   assert.doesNotMatch(main, /当前显示演示数据/);
   assert.doesNotMatch(main, /该金额由本地模拟流水计算/);
+  assert.doesNotMatch(main, /演示|模拟|DEMO-2026/);
+  assert.doesNotMatch(demoData, /演示|模拟/);
   assert.match(main, /真实充值尚未开放/);
   assert.match(main, /不会参与真实竞价或产生扣费/);
   assert.match(main, /步骤 \$\{wizardStep\} \/ 6/);
@@ -52,6 +55,7 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
   assert.match(main, /每日消耗明细/);
   assert.match(main, /group-spend-chart/);
   assert.match(main, /renderPlatformTrendChart\(groupMetrics/);
+  assert.match(main, /renderPlatformTrendChart\(state\.dailyMetrics/);
   assert.match(main, /Meta.*Google.*TikTok.*Kuai/);
   assert.match(dataSource, /meta_spend/);
   assert.match(dataSource, /google_spend/);

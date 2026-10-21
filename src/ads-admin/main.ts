@@ -199,7 +199,7 @@ function renderApp(): void {
           <button class="menu-button" type="button" data-action="open-menu" aria-label="打开菜单">☰</button>
           <div class="account-switcher">
             <span class="account-avatar">星</span>
-            <span><strong>星火演示账户</strong><small>账户 ID：DEMO-2026</small></span>
+            <span><strong>星火推广账户</strong><small>广告管理后台</small></span>
           </div>
           <div class="topbar-actions">
             <label class="date-select">报告周期
@@ -267,6 +267,9 @@ function renderOverview(): string {
   const cpc = totals.clicks ? totals.spend / totals.clicks : 0;
   const cpa = totals.conversions ? totals.spend / totals.conversions : 0;
   const active = performanceCampaigns().filter(campaign => campaign.status === '投放中' || campaign.status === '预算受限');
+  const overviewPlatformTotals = filterDailyMetrics(state.dailyMetrics, state.preferences.dateRange)
+    .reduce((sum, metric) => sum + adPlatforms.reduce((platformSum, platform) => platformSum + (metric.platformSpend?.[platform.key] ?? 0), 0), 0);
+  const hasPlatformData = overviewPlatformTotals > 0;
   return `
     ${pageHeading('账户概览', '快速了解推广效果、预算状态和需要处理的问题。', `
       <button class="primary-button" type="button" data-action="new-campaign">＋ 新建推广计划</button>`)}
@@ -281,17 +284,17 @@ function renderOverview(): string {
     <div class="dashboard-grid">
       <section class="panel chart-panel">
         <div class="panel-heading">
-          <div><h2>消耗与点击趋势</h2><p>过去 7 天模拟数据</p></div>
-          <span class="legend"><i></i> 消耗</span>
+          <div><h2>各平台每日消耗趋势</h2><p>${state.preferences.dateRange}${hasPlatformData ? '' : ' · 当前数据尚未区分平台'}</p></div>
+          ${hasPlatformData ? `<div class="platform-legends">${adPlatforms.map(platform => `<span class="platform-legend ${platform.key}"><i></i>${platform.label}</span>`).join('')}</div>` : '<span class="legend"><i></i> 未分平台总消耗</span>'}
         </div>
-        ${renderTrendChart()}
+        ${hasPlatformData ? renderPlatformTrendChart(state.dailyMetrics, `账户${state.preferences.dateRange}`) : renderTrendChart()}
       </section>
       <section class="panel alerts-panel">
         <div class="panel-heading"><div><h2>优化提醒</h2><p>3 项需要关注</p></div></div>
         <ul class="alert-list">
           <li><span class="alert-icon warning">!</span><span><strong>蓝调口琴课程引流</strong><small>每日预算可能限制当前点击量</small></span><a href="#campaigns">查看</a></li>
-          <li><span class="alert-icon info">i</span><span><strong>独立开发者合作招募</strong><small>素材正在演示审核中</small></span><a href="#ads">查看</a></li>
-          <li><span class="alert-icon success">✓</span><span><strong>转化追踪已工作</strong><small>2 个转化目标收到演示数据</small></span><a href="#conversions">查看</a></li>
+          <li><span class="alert-icon info">i</span><span><strong>独立开发者合作招募</strong><small>素材正在审核中</small></span><a href="#ads">查看</a></li>
+          <li><span class="alert-icon success">✓</span><span><strong>转化追踪已工作</strong><small>2 个转化目标已收到数据</small></span><a href="#conversions">查看</a></li>
         </ul>
       </section>
     </div>
@@ -500,7 +503,7 @@ function renderAds(): string {
         <button type="button" data-action="new-campaign"><span>＋</span><strong>创建新广告</strong><small>通过推广计划向导添加素材</small></button>
       </article>
     </div>
-    <div class="storage-note panel"><strong>素材存储限制</strong><p>本演示版只支持内置图片或小于 800KB 的浏览器本地预览。尚未配置 Cloud Storage，图片不会上传到服务器。</p></div>`;
+    <div class="storage-note panel"><strong>素材存储限制</strong><p>当前版本只支持内置图片或小于 800KB 的浏览器本地预览。尚未配置 Cloud Storage，图片不会上传到服务器。</p></div>`;
 }
 
 function creativeCard(ad: AdCreative): string {
@@ -549,7 +552,7 @@ function renderConversions(): string {
     <div class="conversion-layout">
       <section class="panel table-panel">
         <div class="panel-heading"><div><h2>转化操作</h2><p>${state.conversionActions.length} 个目标</p></div></div>
-        <div class="table-scroll"><table class="data-table"><thead><tr><th>名称</th><th>类别</th><th>状态</th><th>演示转化数</th></tr></thead><tbody>
+        <div class="table-scroll"><table class="data-table"><thead><tr><th>名称</th><th>类别</th><th>状态</th><th>转化数</th></tr></thead><tbody>
           ${state.conversionActions.map(action => `<tr><td><strong>${escapeHtml(action.name)}</strong></td><td>${escapeHtml(action.category)}</td><td><span class="status ${statusClass(action.status)}"><i></i>${action.status}</span></td><td>${formatNumber(action.count)}</td></tr>`).join('')}
         </tbody></table></div>
       </section>
@@ -558,7 +561,7 @@ function renderConversions(): string {
         <form id="conversionForm" class="stacked-form">
           <label>目标名称<input name="name" required maxlength="40" placeholder="例如：完成注册"></label>
           <label>转化类别<select name="category"><option>注册</option><option>潜在客户</option><option>购买</option><option>下载</option><option>自定义事件</option></select></label>
-          <button class="primary-button" type="submit">创建演示目标</button>
+          <button class="primary-button" type="submit">创建转化目标</button>
         </form>
       </section>
     </div>
@@ -649,7 +652,7 @@ function renderWizard(error = ''): void {
         <p class="wizard-error" role="alert">${escapeHtml(error)}</p>
         <footer class="wizard-footer">
           <button class="secondary-button" type="button" data-action="wizard-back" ${wizardStep === 1 ? 'disabled' : ''}>上一步</button>
-          ${wizardStep < 6 ? '<button class="primary-button" type="button" data-action="wizard-next">继续</button>' : '<button class="primary-button" type="button" data-action="wizard-save">保存并提交演示审核</button>'}
+          ${wizardStep < 6 ? '<button class="primary-button" type="button" data-action="wizard-next">继续</button>' : '<button class="primary-button" type="button" data-action="wizard-save">保存并提交审核</button>'}
         </footer>
       </section>
     </div>`;
@@ -675,7 +678,7 @@ function wizardStepContent(): string {
       <label>结束日期<input id="draftEnd" type="date" value="${draft.endDate}"></label>
       <label>每日预算（元）<input id="draftDaily" type="number" min="10" step="1" value="${draft.dailyBudget}"></label>
       <label>总预算（元）<input id="draftTotal" type="number" min="10" step="1" value="${draft.totalBudget}"></label>
-      <div class="budget-preview full"><span>预计最长投放</span><strong>${Math.max(1, Math.ceil(draft.totalBudget / draft.dailyBudget))} 天</strong><small>演示估算，不代表实际流量结果</small></div>
+      <div class="budget-preview full"><span>预计最长投放</span><strong>${Math.max(1, Math.ceil(draft.totalBudget / draft.dailyBudget))} 天</strong><small>预计值，不代表实际流量结果</small></div>
     </div>`;
   }
   if (wizardStep === 4) {
@@ -689,8 +692,8 @@ function wizardStepContent(): string {
     return `<div class="wizard-form two-columns">
       <label class="full">广告组名称<input id="draftGroup" value="${escapeHtml(draft.adGroupName)}" maxlength="40"></label>
       <label>最高 CPC（元）<input id="draftBid" type="number" min="0.1" step="0.01" value="${draft.bid}"></label>
-      <div class="bid-card"><span>演示建议出价</span><strong>¥0.45 – ¥0.80</strong><small>基于模拟流量区间</small></div>
-      <div class="form-tip full"><strong>计费说明</strong><span>当前不会参与真实竞价或产生扣费，设置仅保存为产品演示数据。</span></div>
+      <div class="bid-card"><span>建议出价</span><strong>¥0.45 – ¥0.80</strong><small>基于参考流量区间</small></div>
+      <div class="form-tip full"><strong>计费说明</strong><span>当前不会参与真实竞价或产生扣费，设置仅保存为草稿配置。</span></div>
     </div>`;
   }
   return `<div class="creative-editor">
@@ -790,7 +793,7 @@ function saveDraftCampaign(): void {
   document.querySelector<HTMLDialogElement>('#campaignDialog')?.close();
   window.location.hash = 'campaigns';
   renderApp();
-  showToast('推广计划已保存，并进入演示审核状态。');
+  showToast('推广计划已保存，并进入审核状态。');
 }
 
 function toggleCampaign(id: string): void {
@@ -917,7 +920,7 @@ document.addEventListener('submit', event => {
     state.conversionActions.unshift({ id: createId('conv'), name, category, status: '未验证', count: 0 });
     saveState(state);
     renderApp();
-    showToast('演示转化目标已创建。');
+    showToast('转化目标已创建。');
   }
 });
 
