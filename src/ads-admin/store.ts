@@ -4,6 +4,8 @@ export type CampaignObjective = '网站访问' | '获取线索' | '应用推广'
 export type Campaign = {
   id: string;
   name: string;
+  productUrl?: string;
+  productIconUrl?: string;
   objective: CampaignObjective;
   status: CampaignStatus;
   dailyBudget: number;

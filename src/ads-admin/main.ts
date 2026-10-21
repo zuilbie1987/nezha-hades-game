@@ -191,8 +191,7 @@ function renderApp(): void {
             </a>`).join('')}
         </nav>
         <div class="sidebar-footer">
-          <button class="ghost-button sidebar-reset" type="button" data-action="sync-sheet" ${dataSourceStatus === 'loading' ? 'disabled' : ''}>↻ 同步 Google Sheet</button>
-          <p>${dataSourceStatus === 'remote' ? '数据来自 Google Sheet' : '当前显示本地备用数据'}</p>
+          <button class="ghost-button sidebar-reset" type="button" data-action="sync-sheet" ${dataSourceStatus === 'loading' ? 'disabled' : ''}>↻ 同步</button>
         </div>
       </aside>
       <button class="sidebar-scrim" type="button" data-action="close-menu" aria-label="关闭菜单"></button>
@@ -414,7 +413,7 @@ function campaignTable(campaigns: Campaign[], compact: boolean): string {
           ${campaigns.map(campaign => `
             <tr>
               <td><span class="status ${statusClass(campaign.status)}"><i></i>${campaign.status}</span></td>
-              <td><strong class="campaign-name">${escapeHtml(campaign.name)}</strong><small>${campaign.objective} · ${escapeHtml(campaign.region)}</small></td>
+              <td>${campaignProduct(campaign)}<small>${campaign.objective} · ${escapeHtml(campaign.region)}</small></td>
               <td>${formatMoney(campaign.dailyBudget)}</td>
               <td>${formatMoney(campaign.spend)}</td>
               <td>${formatNumber(campaign.impressions)}</td>
@@ -427,6 +426,15 @@ function campaignTable(campaigns: Campaign[], compact: boolean): string {
         </tbody>
       </table>
     </div>`;
+}
+
+function campaignProduct(campaign: Campaign): string {
+  const initial = Array.from(campaign.name.trim())[0] ?? '•';
+  const icon = `<span class="campaign-product-icon" aria-hidden="true"><span>${escapeHtml(initial)}</span>${campaign.productIconUrl ? `<img data-product-icon src="${escapeHtml(campaign.productIconUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>`;
+  const content = `${icon}<strong class="campaign-name">${escapeHtml(campaign.name)}</strong>`;
+  return campaign.productUrl
+    ? `<a class="campaign-product-link" href="${escapeHtml(campaign.productUrl)}" target="_blank" rel="noopener noreferrer" aria-label="访问 ${escapeHtml(campaign.name)} 产品页面">${content}</a>`
+    : `<span class="campaign-product">${content}</span>`;
 }
 
 function campaignActions(campaign: Campaign): string {
@@ -766,6 +774,7 @@ function saveDraftCampaign(): void {
   const campaign: Campaign = {
     id: campaignId,
     name: draft.name,
+    productUrl: draft.landingPage,
     objective: draft.objective,
     status: '审核中',
     dailyBudget: draft.dailyBudget,
@@ -916,6 +925,11 @@ document.addEventListener('click', event => {
   if (action === 'export-report') exportReport();
   if (action === 'sync-sheet') void syncSheetData(true);
 });
+
+document.addEventListener('error', event => {
+  const image = event.target;
+  if (image instanceof HTMLImageElement && image.hasAttribute('data-product-icon')) image.remove();
+}, true);
 
 document.addEventListener('submit', event => {
   const form = event.target as HTMLFormElement;

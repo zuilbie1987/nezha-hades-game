@@ -56,6 +56,17 @@ function toDevices(value: unknown): string[] {
   return devices.length ? devices : ['桌面端', '移动端'];
 }
 
+function toHttpUrl(value: unknown): string | undefined {
+  const candidate = String(value ?? '').trim();
+  if (!candidate) return undefined;
+  try {
+    const url = new URL(candidate);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function campaignDuration(startDate: string, endDate: string): number {
   const start = Date.parse(startDate);
   const end = Date.parse(endDate);
@@ -75,6 +86,8 @@ export function mapSheetCampaigns(campaignRows: SheetRow[], updatedAt = ''): Cam
     return [{
       id,
       name,
+      productUrl: toHttpUrl(row.product_url ?? row.productUrl),
+      productIconUrl: toHttpUrl(row.product_icon_url ?? row.productIconUrl),
       objective: toObjective(row.objective),
       status: toStatus(row.status),
       dailyBudget,

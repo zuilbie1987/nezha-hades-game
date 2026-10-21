@@ -29,7 +29,9 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
 
   assert.match(store, /const STORAGE_KEY = 'adsAdmin:v1'/);
   assert.match(store, /schemaVersion: 1/);
-  assert.match(main, /同步 Google Sheet/);
+  assert.match(main, />↻ 同步<\/button>/);
+  assert.doesNotMatch(main, /['"]数据来自 Google Sheet['"]/);
+  assert.match(main, /campaign-product-link/);
   assert.match(main, /data-action="toggle-language"/);
   assert.match(main, /localizeElement\(app, language\)/);
   assert.match(i18n, /adsAdmin:language/);
@@ -137,6 +139,8 @@ test('Google Sheet rows preserve campaign configuration and daily metrics', asyn
       start_date: '2026-09-01',
       end_date: '2026-09-30',
       region: 'CN',
+      product_url: 'https://example.com/product',
+      product_icon_url: 'https://example.com/icon.png',
     },
   ]);
   const [metric] = mapSheetDailyMetrics([
@@ -146,10 +150,22 @@ test('Google Sheet rows preserve campaign configuration and daily metrics', asyn
   assert.equal(campaign.status, '投放中');
   assert.equal(campaign.objective, '网站访问');
   assert.equal(campaign.totalBudget, 3000);
+  assert.equal(campaign.productUrl, 'https://example.com/product');
+  assert.equal(campaign.productIconUrl, 'https://example.com/icon.png');
   assert.deepEqual(
     { spend: metric.spend, impressions: metric.impressions, clicks: metric.clicks, conversions: metric.conversions },
     { spend: 12.5, impressions: 1000, clicks: 25, conversions: 2 },
   );
+});
+
+test('campaign product links only accept HTTP URLs', async () => {
+  const { mapSheetCampaigns } = await import('../src/ads-admin/data-source.ts');
+  const [campaign] = mapSheetCampaigns([{
+    id: 'cmp_unsafe', name: '不安全链接', product_url: 'javascript:alert(1)', product_icon_url: 'data:image/png;base64,abc',
+  }]);
+
+  assert.equal(campaign.productUrl, undefined);
+  assert.equal(campaign.productIconUrl, undefined);
 });
 
 test('daily metrics use platform spend fields when supplied', async () => {
