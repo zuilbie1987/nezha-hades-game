@@ -192,6 +192,7 @@ function renderApp(): void {
         </nav>
         <div class="sidebar-footer">
           <button class="ghost-button sidebar-reset" type="button" data-action="sync-sheet" ${dataSourceStatus === 'loading' ? 'disabled' : ''}>↻ 同步</button>
+          <p class="copyright">© 2026 WBCGLOBAL LIMITED</p>
         </div>
       </aside>
       <button class="sidebar-scrim" type="button" data-action="close-menu" aria-label="关闭菜单"></button>

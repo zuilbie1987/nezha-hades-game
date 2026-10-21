@@ -51,6 +51,7 @@ a { color: inherit; }
 .nav-icon { width: 24px; color: #9d92ff; font-size: 19px; text-align: center; }
 .sidebar-footer { margin-top: auto; padding: 18px 8px 0; border-top: 1px solid rgba(255,255,255,.09); }
 .sidebar-reset { width: 100%; color: #b7c0d1; border-color: rgba(255,255,255,.12) !important; }
+.copyright { margin: 12px 0 0; color: #748096; font-size: 9px; line-height: 1.5; text-align: center; }
 .workspace { min-width: 0; margin-left: 248px; }
 .topbar {
   position: sticky; z-index: 30; top: 0; display: flex; align-items: center; min-height: 70px; padding: 0 34px;

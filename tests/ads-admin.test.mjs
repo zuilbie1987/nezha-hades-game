@@ -30,6 +30,7 @@ test('ads admin uses Google Sheet data with a local fallback', async () => {
   assert.match(store, /const STORAGE_KEY = 'adsAdmin:v1'/);
   assert.match(store, /schemaVersion: 1/);
   assert.match(main, />↻ 同步<\/button>/);
+  assert.match(main, /© 2026 WBCGLOBAL LIMITED/);
   assert.doesNotMatch(main, /['"]数据来自 Google Sheet['"]/);
   assert.match(main, /campaign-product-link/);
   assert.match(main, /data-action="toggle-language"/);
