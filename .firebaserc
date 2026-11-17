@@ -1,5 +1,12 @@
 {
   "projects": {
     "default": "neza-draw"
+  },
+  "targets": {
+    "neza-draw": {
+      "hosting": {
+        "motion-catch": ["neza-draw-motion-catch"]
+      }
+    }
   }
 }

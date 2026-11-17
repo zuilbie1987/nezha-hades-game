@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111310">
+  <meta name="description" content="用手机前置摄像头控制接球板，挑战 30 秒体感接球。">
+  <title>动感接球 · 体感游戏</title>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="./" aria-label="动感接球首页"><span class="mark" aria-hidden="true">↗</span> MOTION<span class="brand-accent">/</span>CATCH</a>
+    <span id="camera-state" class="status" role="status"><i></i><span>摄像头未开启</span></span>
+  </header>
+  <main>
+    <div class="heading"><h1>动感接球<span>。</span></h1><p>左右移动身体，接住下落的球。</p></div>
+    <div class="layout">
+      <section class="game" aria-label="游戏">
+        <div class="scoreboard">
+          <div><span>得分</span><strong id="score">00</strong></div>
+          <div class="clock"><span>剩余时间</span><strong id="time">30<span>s</span></strong></div>
+        </div>
+        <div class="arena">
+          <canvas id="arena" aria-label="接球场地"></canvas>
+          <div id="overlay" class="overlay">
+            <div id="overlay-icon" class="target" aria-hidden="true"><b></b></div>
+            <h2 id="title">准备好了吗？</h2>
+            <p id="message">把手机固定在面前，退后直到双肩入镜。</p>
+            <button id="action">开启摄像头 <span aria-hidden="true">↗</span></button>
+            <button id="practice" class="secondary">键盘试玩</button>
+          </div>
+        </div>
+        <div class="game-footer"><span id="hint">· 等待开始</span><button id="end" class="secondary" hidden>结束本局</button></div>
+      </section>
+      <aside>
+        <section class="panel">
+          <h2>摄像头预览</h2>
+          <div class="preview">
+            <video id="camera" autoplay muted playsinline></video>
+            <canvas id="tracking" aria-hidden="true"></canvas>
+            <span id="preview-placeholder">摄像头关闭</span>
+          </div>
+          <p>视频仅在当前设备处理。</p>
+        </section>
+        <section class="panel instructions">
+          <h2>怎么玩</h2>
+          <ol>
+            <li><span>01</span>正对摄像头，双肩入镜</li>
+            <li><span>02</span>站在画面中央，等倒计时</li>
+            <li><span>03</span>左右移动，用接球板得分</li>
+          </ol>
+        </section>
+      </aside>
+    </div>
+  </main>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

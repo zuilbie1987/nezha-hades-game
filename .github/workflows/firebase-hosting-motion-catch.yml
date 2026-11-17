@@ -1,0 +1,43 @@
+name: Deploy Motion Catch test site
+
+on:
+  push:
+    branches: [codex/motion-catch-hosting]
+    paths:
+      - 'motion-catch/**'
+      - 'firebase.motion-catch.json'
+      - '.firebaserc'
+      - '.github/workflows/firebase-hosting-motion-catch.yml'
+
+permissions:
+  contents: read
+
+concurrency: motion-catch-hosting
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: npm ci && npm test && npm run build
+        working-directory: motion-catch
+      - run: npm install --global firebase-tools@15.33.0
+      - name: Deploy the test site
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_NEZA_DRAW }}
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/motion-catch-firebase.json
+        run: |
+          umask 077
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > "$GOOGLE_APPLICATION_CREDENTIALS"
+          unset FIREBASE_SERVICE_ACCOUNT
+          trap 'rm -f "$GOOGLE_APPLICATION_CREDENTIALS"' EXIT
+
+          sites=$(firebase hosting:sites:list --project neza-draw --non-interactive --json)
+          if ! jq -e '.result.sites | any(.name | endswith("/neza-draw-motion-catch"))' <<< "$sites" > /dev/null; then
+            firebase hosting:sites:create neza-draw-motion-catch --project neza-draw --non-interactive
+          fi
+          firebase deploy --config firebase.motion-catch.json --project neza-draw --only hosting:motion-catch --non-interactive

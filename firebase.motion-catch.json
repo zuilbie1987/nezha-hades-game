@@ -1,0 +1,7 @@
+{
+  "hosting": {
+    "target": "motion-catch",
+    "public": "motion-catch/dist",
+    "ignore": ["**/.*", "**/node_modules/**"]
+  }
+}

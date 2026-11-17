@@ -1,0 +1,12 @@
+{
+  "name": "motion-catch",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "node --test"
+  },
+  "dependencies": { "@mediapipe/tasks-vision": "0.10.32" },
+  "devDependencies": { "typescript": "6.0.3", "vite": "8.3.8" }
+}
