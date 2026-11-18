@@ -264,10 +264,54 @@ function draw() {
   ctx.roundRect((round.paddle - paddleHalfWidth) * width, y, paddleHalfWidth * 2 * width, 10, 5);
   ctx.fill();
   for (const ball of round.balls) {
+    const x = ball.x * width;
+    const ballY = ball.y * height;
+    const radius = clamp(width * 0.015, 6, 10);
+    const bomb = ball.kind === "bomb";
+    ctx.fillStyle = bomb ? "#ff6559" : ball.caught ? "#fff3a0" : "#d6fa53";
+    ctx.shadowColor = ctx.fillStyle;
     ctx.beginPath();
-    ctx.arc(ball.x * width, ball.y * height, clamp(width * 0.015, 6, 10), 0, Math.PI * 2);
+    ctx.arc(x, ballY, radius, 0, Math.PI * 2);
     ctx.fill();
+    if (bomb) {
+      ctx.strokeStyle = "#ffe3a0";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + radius * 0.4, ballY - radius * 0.8);
+      ctx.quadraticCurveTo(x + radius * 0.3, ballY - radius * 1.8, x + radius, ballY - radius * 1.6);
+      ctx.stroke();
+      ctx.fillStyle = "#311510";
+      ctx.font = `bold ${radius * 1.5}px sans-serif`;
+      ctx.textAlign = "center";
+      ctx.fillText("!", x, ballY + radius * 0.55);
+    }
   }
+  for (const explosion of round.explosions) {
+    const progress = explosion.age / 0.65;
+    const x = explosion.x * width;
+    const explosionY = explosion.y * height;
+    ctx.globalAlpha = 1 - progress;
+    ctx.shadowColor = "#ff783e";
+    ctx.strokeStyle = "#ffb453";
+    ctx.lineWidth = 3 * (1 - progress) + 1;
+    ctx.beginPath();
+    ctx.arc(x, explosionY, 8 + progress * 52, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "#ff6559";
+    for (let particle = 0; particle < 12; particle++) {
+      const angle = particle * Math.PI / 6;
+      const distance = progress * (particle % 2 ? 65 : 45);
+      ctx.beginPath();
+      ctx.arc(x + Math.cos(angle) * distance, explosionY + Math.sin(angle) * distance + progress * progress * 25,
+        4 * (1 - progress) + 1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#fff0cf";
+    ctx.font = "bold 22px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("−1", x, explosionY - 20 - progress * 40);
+  }
+  ctx.globalAlpha = 1;
   ctx.shadowBlur = 0;
 }
 
